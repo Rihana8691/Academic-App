@@ -3,10 +3,12 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'rea
 import { useFocusEffect } from '@react-navigation/native';
 import { getCoursesBySemester, updateCourseGrade, updateSemesterGPA } from '../dbHelpers';
 import { calculateSemesterGPA, GRADE_POINTS } from '../gpaCalculator';
+import { useTheme } from '../ThemeContext';
 
 const GRADE_OPTIONS = Object.keys(GRADE_POINTS); // ['A+','A','B+','B','C+','C','D','F']
 
 export default function FinalGradesScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const { semesterId, semesterName } = route.params;
   const [courses, setCourses] = useState([]);
   const [grades, setGrades] = useState({}); // { courseId: 'A+' }
@@ -28,7 +30,6 @@ export default function FinalGradesScreen({ route, navigation }) {
   }
 
   function handleCalculate() {
-    // Check all courses have a grade selected
     const missing = courses.filter((c) => !grades[c.id]);
     if (missing.length > 0) {
       Alert.alert(
@@ -38,19 +39,16 @@ export default function FinalGradesScreen({ route, navigation }) {
       return;
     }
 
-    // Save each grade to the course record
     courses.forEach((c) => {
       updateCourseGrade(c.id, grades[c.id]);
     });
 
-    // Calculate semester GPA using the verified calculator logic
     const courseData = courses.map((c) => ({
       creditHours: c.credit_hours,
       grade: grades[c.id],
     }));
     const result = calculateSemesterGPA(courseData);
 
-    // Save GPA + total credits back to the semester record
     updateSemesterGPA(semesterId, result.gpa, result.totalCredits);
 
     Alert.alert(
@@ -60,14 +58,16 @@ export default function FinalGradesScreen({ route, navigation }) {
     );
   }
 
+  const styles = createStyles(colors);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.header}>{semesterName}</Text>
-      <Text style={styles.subheader}>Enter final grades for each course</Text>
+    <ScrollView style={[styles.container, {backgroundColor: colors.background}]} contentContainerStyle={{ paddingBottom: 40 }}>
+      <Text style={[styles.header, {color: colors.text}]}>{semesterName}</Text>
+      <Text style={[styles.subheader, {color: colors.subText}]}>Enter final grades for each course</Text>
 
       {courses.map((course) => (
-        <View key={course.id} style={styles.courseCard}>
-          <Text style={styles.courseName}>
+        <View key={course.id} style={[styles.courseCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <Text style={[styles.courseName, {color: colors.text}]}>
             {course.name} · {course.credit_hours} credits
           </Text>
           <View style={styles.gradeRow}>
@@ -76,14 +76,16 @@ export default function FinalGradesScreen({ route, navigation }) {
                 key={g}
                 style={[
                   styles.gradeChip,
-                  grades[course.id] === g && styles.gradeChipSelected,
+                  {borderColor: colors.border, backgroundColor: colors.card},
+                  grades[course.id] === g && {backgroundColor: colors.accent, borderColor: colors.accent},
                 ]}
                 onPress={() => selectGrade(course.id, g)}
               >
                 <Text
                   style={[
                     styles.gradeChipText,
-                    grades[course.id] === g && styles.gradeChipTextSelected,
+                    {color: colors.text},
+                    grades[course.id] === g && {color: colors.buttonText},
                   ]}
                 >
                   {g}
@@ -95,49 +97,43 @@ export default function FinalGradesScreen({ route, navigation }) {
       ))}
 
       {courses.length === 0 && (
-        <Text style={styles.emptyText}>No courses in this semester yet.</Text>
+        <Text style={[styles.emptyText, {color: colors.subText}]}>No courses in this semester yet.</Text>
       )}
 
       {courses.length > 0 && (
-        <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
-          <Text style={styles.calculateButtonText}>Calculate Semester GPA</Text>
+        <TouchableOpacity style={[styles.calculateButton, {backgroundColor: colors.text}]} onPress={handleCalculate}>
+          <Text style={[styles.calculateButtonText, {color: colors.background}]}>Calculate Semester GPA</Text>
         </TouchableOpacity>
       )}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212', padding: 20 },
-  header: { fontSize: 26, fontWeight: 'bold', color: '#FFFFFF' },
-  subheader: { fontSize: 14, color: '#B0B0B0', marginBottom: 20 },
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  header: { fontSize: 26, fontWeight: '900', textTransform: 'uppercase', letterSpacing: -1 },
+  subheader: { fontSize: 14, marginBottom: 20, fontWeight: '700' },
   courseCard: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14,
+    borderRadius: 15,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
   },
-  courseName: { fontSize: 16, fontWeight: '600', marginBottom: 10, color: '#FFFFFF' },
+  courseName: { fontSize: 16, fontWeight: '900', marginBottom: 12 },
   gradeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   gradeChip: {
-    borderWidth: 1,
-    borderColor: '#4DB6AC',
+    borderWidth: 2,
     borderRadius: 8,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  gradeChipSelected: {
-    backgroundColor: '#4DB6AC',
-  },
-  gradeChipText: { color: '#4DB6AC', fontWeight: '600' },
-  gradeChipTextSelected: { color: '#FFFFFF' },
-  emptyText: { color: '#666666', textAlign: 'center', marginTop: 40 },
+  gradeChipText: { fontWeight: '900', fontSize: 13 },
+  emptyText: { textAlign: 'center', marginTop: 40, fontWeight: '700' },
   calculateButton: {
-    backgroundColor: '#4DB6AC',
     borderRadius: 12,
-    padding: 16,
+    padding: 18,
     alignItems: 'center',
     marginTop: 10,
   },
-  calculateButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  calculateButtonText: { fontWeight: '900', fontSize: 16, textTransform: 'uppercase' },
 });

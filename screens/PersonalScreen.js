@@ -4,8 +4,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getPrayers, updatePrayer, getPersonalNotes, addPersonalNote, deletePersonalNote } from '../dbHelpers';
+import { useTheme } from '../ThemeContext';
 
 export default function PersonalScreen() {
+  const { colors, theme } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [prayers, setPrayers] = useState({});
@@ -41,39 +43,41 @@ export default function PersonalScreen() {
 
   const PrayerBtn = ({ label, field, icon }) => (
     <TouchableOpacity
-      style={[styles.prayerBtn, prayers[field] && styles.prayerBtnActive]}
+      style={[styles.prayerBtn, {backgroundColor: colors.secondary, borderColor: colors.border}, prayers[field] && {backgroundColor: colors.accent, borderColor: colors.accent}]}
       onPress={() => togglePrayer(field)}
     >
-      <MaterialCommunityIcons name={icon} size={24} color={prayers[field] ? '#fff' : '#4DB6AC'} />
-      <Text style={[styles.prayerLabel, prayers[field] && styles.prayerLabelActive]}>{label}</Text>
-      {prayers[field] && <Ionicons name="checkmark-circle" size={16} color="#fff" style={styles.check} />}
+      <MaterialCommunityIcons name={icon} size={24} color={prayers[field] ? colors.buttonText : colors.accent} />
+      <Text style={[styles.prayerLabel, {color: colors.text}, prayers[field] && {color: colors.buttonText}]}>{label}</Text>
+      {prayers[field] && <Ionicons name="checkmark-circle" size={16} color={colors.buttonText} style={styles.check} />}
     </TouchableOpacity>
   );
 
   const HabitItem = ({ label, field, icon }) => (
     <TouchableOpacity
-      style={styles.habitItemRow}
+      style={[styles.habitItemRow, {borderBottomColor: colors.border}]}
       onPress={() => togglePrayer(field)}
     >
-      <View style={styles.habitIconBg}>
-        <Ionicons name={icon} size={20} color="#4DB6AC" />
+      <View style={[styles.habitIconBg, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+        <Ionicons name={icon} size={20} color={colors.accent} />
       </View>
-      <Text style={styles.habitLabel}>{label}</Text>
-      <View style={[styles.checkbox, prayers[field] && styles.checkboxActive]}>
-        {prayers[field] ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+      <Text style={[styles.habitLabel, {color: colors.text}]}>{label}</Text>
+      <View style={[styles.checkbox, {borderColor: colors.border, backgroundColor: colors.card}, prayers[field] && {backgroundColor: colors.accent, borderColor: colors.accent}]}>
+        {prayers[field] ? <Ionicons name="checkmark" size={16} color={colors.buttonText} /> : null}
       </View>
     </TouchableOpacity>
   );
 
+  const styles = createStyles(colors);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.header}>My Day</Text>
-            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateBadge}>
-              <Ionicons name="calendar-outline" size={14} color="#4DB6AC" style={{marginRight: 5}} />
-              <Text style={styles.subheader}>{selectedDate.toDateString()}</Text>
+            <Text style={[styles.header, {color: colors.text}]}>My Day</Text>
+            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateBadge, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <Ionicons name="calendar-outline" size={14} color={colors.accent} style={{marginRight: 5}} />
+              <Text style={[styles.subheader, {color: colors.accent}]}>{selectedDate.toDateString()}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -82,11 +86,10 @@ export default function PersonalScreen() {
           <DateTimePicker value={selectedDate} mode="date" display="default" onChange={onDateChange} />
         )}
 
-        {/* PRAYER TRACKER */}
-        <View style={[styles.card, styles.shadow]}>
+        <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="sunny-outline" size={20} color="#4DB6AC" />
-            <Text style={styles.cardTitle}>Prayer Tracker</Text>
+            <Ionicons name="sunny-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, {color: colors.text}]}>Prayer Tracker</Text>
           </View>
           <View style={styles.prayerGrid}>
             <PrayerBtn label="Fajr" field="fajr" icon="weather-sunset-up" />
@@ -97,11 +100,10 @@ export default function PersonalScreen() {
           </View>
         </View>
 
-        {/* HABIT TRACKER */}
-        <View style={[styles.card, styles.shadow]}>
+        <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="checkbox-outline" size={20} color="#4DB6AC" />
-            <Text style={styles.cardTitle}>Daily Habits</Text>
+            <Ionicons name="checkbox-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, {color: colors.text}]}>Daily Habits</Text>
           </View>
           <View style={styles.habitList}>
             <HabitItem label="No Sugar Today" field="no_sugar" icon="nutrition-outline" />
@@ -110,34 +112,33 @@ export default function PersonalScreen() {
           </View>
         </View>
 
-        {/* DAILY JOURNAL */}
-        <View style={[styles.card, styles.shadow]}>
+        <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="journal-outline" size={20} color="#4DB6AC" />
-            <Text style={styles.cardTitle}>Daily Journal</Text>
+            <Ionicons name="journal-outline" size={20} color={colors.accent} />
+            <Text style={[styles.cardTitle, {color: colors.text}]}>Daily Journal</Text>
           </View>
 
           <TextInput
-            style={styles.input}
+            style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
             placeholder="What's on your mind?..."
             placeholderTextColor="#666"
             multiline
             value={newNote}
             onChangeText={setNewNote}
           />
-          <TouchableOpacity style={styles.saveBtn} onPress={handleAddNote}>
-            <Text style={styles.saveBtnText}>Save Note</Text>
+          <TouchableOpacity style={[styles.saveBtn, {backgroundColor: colors.text}]} onPress={handleAddNote}>
+            <Text style={[styles.saveBtnText, {color: colors.background}]}>Save Note</Text>
           </TouchableOpacity>
 
           <View style={styles.notesList}>
             {notes.map(note => (
-              <View key={note.id} style={styles.noteItem}>
+              <View key={note.id} style={[styles.noteItem, {borderBottomColor: colors.border}]}>
                 <View style={{flex: 1}}>
-                  <Text style={styles.noteText}>{note.text_content}</Text>
-                  <Text style={styles.noteDate}>{note.created_at.split(' ')[0]}</Text>
+                  <Text style={[styles.noteText, {color: colors.text}]}>{note.text_content}</Text>
+                  <Text style={[styles.noteDate, {color: colors.subText}]}>{note.created_at.split(' ')[0]}</Text>
                 </View>
                 <TouchableOpacity onPress={() => { deletePersonalNote(note.id); loadData(); }}>
-                  <Ionicons name="trash-outline" size={18} color="#D32F2F" />
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -148,32 +149,35 @@ export default function PersonalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1 },
   headerRow: { marginBottom: 24 },
-  header: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' },
-  dateBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1E1E', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', marginTop: 8, borderWidth: 1, borderColor: '#333' },
-  subheader: { fontSize: 13, color: '#4DB6AC', fontWeight: 'bold' },
-  card: { backgroundColor: '#1E1E1E', borderRadius: 20, padding: 16, marginBottom: 20 },
-  shadow: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
+  header: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  dateBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start', marginTop: 10, borderWidth: 2 },
+  subheader: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
+  card: { borderRadius: 15, padding: 18, marginBottom: 20, borderWidth: 2 },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 0
+  },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#4DB6AC' },
+  cardTitle: { fontSize: 15, fontWeight: '900', textTransform: 'uppercase' },
   prayerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  prayerBtn: { flex: 1, minWidth: '30%', backgroundColor: '#262626', padding: 15, borderRadius: 15, alignItems: 'center', position: 'relative' },
-  prayerBtnActive: { backgroundColor: '#004D40', borderWidth: 1, borderColor: '#4DB6AC' },
-  prayerLabel: { fontSize: 12, fontWeight: 'bold', color: '#B0B0B0', marginTop: 5 },
-  prayerLabelActive: { color: '#4DB6AC' },
+  prayerBtn: { flex: 1, minWidth: '30%', padding: 15, borderRadius: 12, alignItems: 'center', position: 'relative', borderWidth: 1.5 },
+  prayerLabel: { fontSize: 10, fontWeight: '900', marginTop: 5, textTransform: 'uppercase' },
   check: { position: 'absolute', top: 5, right: 5 },
-  input: { backgroundColor: '#262626', borderRadius: 12, padding: 15, height: 100, textAlignVertical: 'top', fontSize: 15, color: '#FFFFFF', borderColor: '#333333', borderWidth: 1 },
-  saveBtn: { backgroundColor: '#4DB6AC', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  saveBtnText: { color: '#FFFFFF', fontWeight: 'bold' },
+  input: { borderRadius: 12, padding: 15, height: 100, textAlignVertical: 'top', fontSize: 15, borderWidth: 2, fontWeight: '700' },
+  saveBtn: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  saveBtnText: { fontWeight: '900', textTransform: 'uppercase' },
   notesList: { marginTop: 20 },
-  noteItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#262626', flexDirection: 'row', alignItems: 'center' },
-  noteText: { fontSize: 14, color: '#E0E0E0', lineHeight: 20 },
-  noteDate: { fontSize: 11, color: '#9E9E9E', marginTop: 4 },
-  habitItemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#262626' },
-  habitIconBg: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#004D40', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  habitLabel: { flex: 1, fontSize: 15, color: '#E0E0E0', fontWeight: '500' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#4DB6AC', justifyContent: 'center', alignItems: 'center' },
-  checkboxActive: { backgroundColor: '#4DB6AC' }
+  noteItem: { paddingVertical: 12, borderBottomWidth: 1.5, flexDirection: 'row', alignItems: 'center' },
+  noteText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  noteDate: { fontSize: 11, marginTop: 4, fontWeight: '900' },
+  habitItemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1.5 },
+  habitIconBg: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1.5 },
+  habitLabel: { flex: 1, fontSize: 15, fontWeight: '800' },
+  checkbox: { width: 26, height: 26, borderRadius: 6, borderWidth: 2.5, justifyContent: 'center', alignItems: 'center' },
 });

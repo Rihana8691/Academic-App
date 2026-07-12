@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { addCourse } from '../dbHelpers';
+import { useTheme } from '../ThemeContext';
 
 export default function AddCourseScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const { semesterId } = route.params;
   const [name, setName] = useState('');
   const [courseCode, setCourseCode] = useState('');
@@ -23,59 +25,61 @@ export default function AddCourseScreen({ route, navigation }) {
     navigation.goBack();
   }
 
+  const styles = createStyles(colors);
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Course Name</Text>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <Text style={[styles.label, {color: colors.text}]}>Course Name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
         placeholder="e.g. Database Systems"
+        placeholderTextColor="#666"
         value={name}
         onChangeText={setName}
         autoFocus
       />
 
-      <Text style={styles.label}>Course ID (optional)</Text>
+      <Text style={[styles.label, {color: colors.text}]}>Course ID (optional)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
         placeholder="e.g. SE301"
+        placeholderTextColor="#666"
         value={courseCode}
         onChangeText={setCourseCode}
       />
 
-      <Text style={styles.label}>Credit Hours</Text>
+      <Text style={[styles.label, {color: colors.text}]}>Credit Hours</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
         placeholder="e.g. 3"
+        placeholderTextColor="#666"
         value={creditHours}
         onChangeText={setCreditHours}
         keyboardType="numeric"
       />
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save</Text>
+      <TouchableOpacity style={[styles.saveButton, {backgroundColor: colors.text}]} onPress={handleSave}>
+        <Text style={[styles.saveButtonText, {color: colors.background}]}>Save</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212', padding: 20 },
-  label: { fontSize: 14, color: '#B0B0B0', marginBottom: 8, marginTop: 12 },
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  label: { fontSize: 12, marginBottom: 8, marginTop: 15, fontWeight: '900', textTransform: 'uppercase' },
   input: {
-    borderWidth: 1,
-    borderColor: '#333333',
-    borderRadius: 8,
-    padding: 12,
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 15,
     fontSize: 16,
-    backgroundColor: '#1E1E1E',
-    color: '#FFFFFF'
+    fontWeight: '700'
   },
   saveButton: {
-    backgroundColor: '#4DB6AC',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 15,
+    padding: 18,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 30,
   },
-  saveButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  saveButtonText: { fontWeight: '900', fontSize: 16, textTransform: 'uppercase' },
 });

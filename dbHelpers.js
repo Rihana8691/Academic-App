@@ -497,3 +497,25 @@ export function addPersonalNote(text) {
 export function deletePersonalNote(id) {
   db.runSync(`DELETE FROM personal_notes WHERE id = ?;`, [id]);
 }
+
+// ---------- THEME SETTINGS ----------
+
+export function getTheme() {
+  try {
+    const user = getUser();
+    return user?.theme || 'light';
+  } catch (e) {
+    return 'light'; // Fallback if table doesn't exist yet
+  }
+}
+
+export function setTheme(themeName) {
+  try {
+    const user = getUser();
+    if (user) {
+      db.runSync(`UPDATE users SET theme = ? WHERE id = ?;`, [themeName, user.id]);
+    }
+  } catch (e) {
+    console.error("Failed to save theme:", e);
+  }
+}

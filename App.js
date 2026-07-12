@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { initDatabase } from './database';
 import { isUserSetupComplete } from './dbHelpers';
+import { ThemeProvider, useTheme } from './ThemeContext';
 
 import LoginScreen from './screens/LoginScreen';
 import DashboardScreen from './screens/DashboardScreen';
@@ -19,103 +20,89 @@ import PersonalScreen from './screens/PersonalScreen';
 
 const Stack = createNativeStackNavigator();
 
-const AppDarkTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: '#4DB6AC',
-    background: '#121212',
-    card: '#1E1E1E',
-    text: '#FFFFFF',
-    border: '#333333',
-    notification: '#FF80AB',
-  },
-};
-
-export default function App() {
+function AppNavigator() {
+  const { theme, colors } = useTheme();
   const [isReady, setIsReady] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
 
   useEffect(() => {
-    try {
-      initDatabase();
-      setNeedsLogin(!isUserSetupComplete());
-    } catch (e) {
-      console.error("Critical Database Initialization Failure:", e);
-    } finally {
-      setIsReady(true);
-    }
+    const bootstrap = () => {
+      try {
+        initDatabase();
+        setNeedsLogin(!isUserSetupComplete());
+      } catch (e) {
+        console.error("Critical Boot Failure:", e);
+      } finally {
+        setIsReady(true);
+      }
+    };
+    bootstrap();
   }, []);
 
   if (!isReady) {
+    const splashBg = theme === 'dark' ? '#121212' : '#F4F1EA';
+    const loaderColor = theme === 'dark' ? '#4DB6AC' : '#1B263B';
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
-        <ActivityIndicator size="large" color="#4DB6AC" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: splashBg }}>
+        <ActivityIndicator size="large" color={loaderColor} />
       </View>
     );
   }
 
+  const baseTheme = theme === 'dark' ? DarkTheme : DefaultTheme;
+
+  // Robust font fallback for React Navigation 7
+  const defaultFonts = {
+    regular: { fontFamily: 'sans-serif', fontWeight: 'normal' },
+    medium: { fontFamily: 'sans-serif-medium', fontWeight: 'normal' },
+    bold: { fontFamily: 'sans-serif', fontWeight: 'bold' },
+    heavy: { fontFamily: 'sans-serif', fontWeight: '900' },
+  };
+
+  const navTheme = {
+    ...baseTheme,
+    colors: {
+      ...baseTheme.colors,
+      primary: colors.accent,
+      background: colors.background,
+      card: colors.background,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.error,
+    },
+    fonts: baseTheme.fonts || defaultFonts,
+  };
+
   return (
-    <NavigationContainer theme={AppDarkTheme}>
+    <NavigationContainer theme={navTheme}>
       <Stack.Navigator
         initialRouteName={needsLogin ? 'Login' : 'Dashboard'}
         screenOptions={{
-          headerStyle: { backgroundColor: '#1E1E1E' },
-          headerTintColor: '#FFFFFF',
-          headerTitleStyle: { fontWeight: 'bold' },
+          headerStyle: { backgroundColor: colors.background, borderBottomWidth: 2, borderBottomColor: colors.border },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+          headerShadowVisible: false,
         }}
       >
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Dashboard"
-          component={DashboardScreen}
-          options={{ title: 'Dashboard' }}
-        />
-        <Stack.Screen
-          name="AddSemester"
-          component={AddSemesterScreen}
-          options={{ title: 'Add Semester' }}
-        />
-        <Stack.Screen
-          name="SemesterDetail"
-          component={SemesterDetailScreen}
-          options={{ title: 'Semester' }}
-        />
-        <Stack.Screen
-          name="AddCourse"
-          component={AddCourseScreen}
-          options={{ title: 'Add Course' }}
-        />
-        <Stack.Screen
-          name="CourseDetail"
-          component={CourseDetailScreen}
-          options={{ title: 'Course' }}
-        />
-        <Stack.Screen
-          name="FinalGrades"
-          component={FinalGradesScreen}
-          options={{ title: 'Final Grades' }}
-        />
-        <Stack.Screen
-          name="UserSetup"
-          component={UserSetupScreen}
-          options={{ title: 'Previous Record' }}
-        />
-        <Stack.Screen
-          name="Tasks"
-          component={TasksScreen}
-          options={{ title: 'Tasks' }}
-        />
-        <Stack.Screen
-          name="Personal"
-          component={PersonalScreen}
-          options={{ title: 'My Day' }}
-        />
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Student' }} />
+        <Stack.Screen name="AddSemester" component={AddSemesterScreen} options={{ title: 'New Term' }} />
+        <Stack.Screen name="SemesterDetail" component={SemesterDetailScreen} options={{ title: 'Term Record' }} />
+        <Stack.Screen name="AddCourse" component={AddCourseScreen} options={{ title: 'Enroll Course' }} />
+        <Stack.Screen name="CourseDetail" component={CourseDetailScreen} options={{ title: 'Course Ledger' }} />
+        <Stack.Screen name="FinalGrades" component={FinalGradesScreen} options={{ title: 'Grade Entry' }} />
+        <Stack.Screen name="UserSetup" component={UserSetupScreen} options={{ title: 'Student File' }} />
+        <Stack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Assignments' }} />
+        <Stack.Screen name="Personal" component={PersonalScreen} options={{ title: 'Daily Log' }} />
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppNavigator />
+    </ThemeProvider>
   );
 }

@@ -41,6 +41,7 @@ export function initDatabase() {
     { table: 'prayers', col: 'no_sugar', type: 'INTEGER DEFAULT 0' },
     { table: 'prayers', col: 'read_book', type: 'INTEGER DEFAULT 0' },
     { table: 'prayers', col: 'study_time', type: 'INTEGER DEFAULT 0' },
+    { table: 'users', col: 'theme', type: 'TEXT DEFAULT "light"' },
   ];
 
   // Execute Table Creation

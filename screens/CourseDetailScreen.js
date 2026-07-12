@@ -27,14 +27,16 @@ import {
   deleteRevisionTopic
 } from '../dbHelpers';
 import { getCountdown } from '../utils';
+import { useTheme } from '../ThemeContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TYPES = ['Lecture', 'Lab', 'Tutorial'];
 
 export default function CourseDetailScreen({ route }) {
+  const { colors, theme } = useTheme();
   const { courseId } = route.params;
 
-  const [activeTab, setActiveTab] = useState('Summary'); // 'Summary' | 'Grades' | 'Attendance' | 'Schedule' | 'Study'
+  const [activeTab, setActiveTab] = useState('Summary');
 
   const [course, setCourse] = useState(null);
   const [goalData, setGoalData] = useState(null);
@@ -88,7 +90,6 @@ export default function CourseDetailScreen({ route }) {
     const examList = getExamsForCourse(courseId);
     setExams(examList);
 
-    // Sync examDates state with DB values
     const dates = { Mid: new Date(), Final: new Date() };
     examList.forEach(e => {
       if (e.exam_date) dates[e.exam_type] = new Date(e.exam_date);
@@ -101,7 +102,6 @@ export default function CourseDetailScreen({ route }) {
 
   useFocusEffect(useCallback(() => loadData(), [loadData]));
 
-  // Handlers
   function handleSaveExam(examType, selectedDate) {
     const formattedDate = selectedDate.toISOString().split('T')[0];
     setExamDate(courseId, examType, formattedDate);
@@ -190,26 +190,26 @@ export default function CourseDetailScreen({ route }) {
   const masteredCount = revisionTopics.filter(t => t.completed).length;
   const masteryPercent = revisionTopics.length > 0 ? (masteredCount / revisionTopics.length) * 100 : 0;
 
-  // Tab Button Component
   const TabButton = ({ name, icon, label }) => (
     <TouchableOpacity
-      style={[styles.tabBtn, activeTab === name && styles.tabBtnActive]}
+      style={[styles.tabBtn, activeTab === name && {backgroundColor: colors.accent}]}
       onPress={() => setActiveTab(name)}
     >
-      <Ionicons name={icon} size={20} color={activeTab === name ? '#fff' : '#757575'} />
-      <Text style={[styles.tabBtnText, activeTab === name && styles.tabBtnTextActive]}>{label}</Text>
+      <Ionicons name={icon} size={20} color={activeTab === name ? colors.buttonText : colors.subText} />
+      <Text style={[styles.tabBtnText, {color: activeTab === name ? colors.buttonText : colors.subText}]}>{label}</Text>
     </TouchableOpacity>
   );
 
+  const styles = createStyles(colors);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <View style={styles.headerArea}>
-        <Text style={styles.header}>{course.name}</Text>
-        <Text style={styles.subheader}>{course.course_code || 'N/A'} · {course.credit_hours} Credits</Text>
+        <Text style={[styles.header, {color: colors.text}]}>{course.name}</Text>
+        <Text style={[styles.subheader, {color: colors.subText}]}>{course.course_code || 'N/A'} · {course.credit_hours} Credits</Text>
       </View>
 
-      {/* Modern Tab Bar */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, {backgroundColor: colors.card, borderColor: colors.border}]}>
         <TabButton name="Summary" icon="stats-chart-outline" label="Home" />
         <TabButton name="Grades" icon="school-outline" label="Grades" />
         <TabButton name="Study" icon="book-outline" label="Study" />
@@ -220,69 +220,66 @@ export default function CourseDetailScreen({ route }) {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {activeTab === 'Summary' && (
-          <>
-            {/* GOAL COACH CARD */}
-            <View style={[styles.card, styles.shadow, { borderLeftColor: goalData.isImpossible ? '#FF5252' : '#4DB6AC', borderLeftWidth: 5 }]}>
+          <View>
+            <View style={[styles.card, styles.shadow, { borderLeftColor: goalData.isImpossible ? colors.error : colors.accent, borderLeftWidth: 5, backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="trending-up" size={22} color="#4DB6AC" />
-                <Text style={styles.cardLabel}>Goal Coach</Text>
+                <Ionicons name="trending-up" size={22} color={colors.accent} />
+                <Text style={[styles.cardLabel, {color: colors.accent}]}>Goal Coach</Text>
               </View>
 
               <View style={styles.goalRow}>
                 <View>
-                  <Text style={styles.goalLabel}>Current Score</Text>
-                  <Text style={styles.goalValue}>{goalData.currentScore}%</Text>
+                  <Text style={[styles.goalLabel, {color: colors.subText}]}>Current Score</Text>
+                  <Text style={[styles.goalValue, {color: colors.accent}]}>{goalData.currentScore}%</Text>
                 </View>
                 <View style={styles.targetBox}>
-                  <Text style={styles.goalLabel}>Target</Text>
-                  <TextInput style={styles.targetInput} value={targetScore} onChangeText={setTargetScore} onBlur={handleUpdateTarget} keyboardType="numeric" />
+                  <Text style={[styles.goalLabel, {color: colors.subText}]}>Target</Text>
+                  <TextInput style={[styles.targetInput, {color: colors.text, borderBottomColor: colors.accent}]} value={targetScore} onChangeText={setTargetScore} onBlur={handleUpdateTarget} keyboardType="numeric" />
                 </View>
               </View>
 
-              <View style={styles.progressContainer}>
-                 <View style={styles.progressBg}><View style={[styles.progressFill, { width: `${goalData.currentScore}%`, backgroundColor: '#4DB6AC' }]} /></View>
+              <View style={[styles.progressContainer, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                 <View style={[styles.progressFill, { width: `${goalData.currentScore}%`, backgroundColor: colors.accent }]} />
               </View>
 
-              <Text style={[styles.coachText, goalData.isImpossible && { color: '#FF5252' }]}>
+              <Text style={[styles.coachText, {color: colors.text}, goalData.isImpossible && { color: colors.error }]}>
                 {goalData.isImpossible
                   ? `Goal not fulfilled. Maximum possible is ${(parseFloat(goalData.currentScore) + goalData.remainingWeight).toFixed(1)}%.`
                   : `You can only lose ${goalData.remainingMistakePoints} more points to meet your goal.`}
               </Text>
             </View>
 
-            {/* Study Progress Mini-Card */}
-            <TouchableOpacity style={[styles.card, styles.shadow]} onPress={() => setActiveTab('Study')}>
+            <TouchableOpacity style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]} onPress={() => setActiveTab('Study')}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="book-outline" size={22} color="#4DB6AC" />
-                <Text style={styles.cardLabel}>Exam Readiness</Text>
+                <Ionicons name="book-outline" size={22} color={colors.accent} />
+                <Text style={[styles.cardLabel, {color: colors.accent}]}>Exam Readiness</Text>
               </View>
               <View style={styles.miniMasteryRow}>
-                <View style={[styles.progressBg, { height: 10 }]}><View style={[styles.progressFill, { width: `${masteryPercent}%`, backgroundColor: '#81C784' }]} /></View>
-                <Text style={styles.masteryText}>{Math.round(masteryPercent)}% mastered</Text>
+                <View style={[styles.progressContainer, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]}><View style={[styles.progressFill, { width: `${masteryPercent}%`, backgroundColor: colors.success }]} /></View>
+                <Text style={[styles.masteryText, {color: colors.success}]}>{Math.round(masteryPercent)}% mastered</Text>
               </View>
             </TouchableOpacity>
 
-            {/* EXAMS DATES CARD */}
-            <View style={[styles.card, styles.shadow]}>
+            <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="alarm-outline" size={22} color="#4DB6AC" />
-                <Text style={styles.cardLabel}>Upcoming Exams</Text>
+                <Ionicons name="alarm-outline" size={22} color={colors.accent} />
+                <Text style={[styles.cardLabel, {color: colors.accent}]}>Upcoming Exams</Text>
               </View>
 
               {EXAM_TYPES.map(type => {
                 const record = exams.find(e => e.exam_type === type);
                 return (
-                  <View key={type} style={styles.examItem}>
+                  <View key={type} style={[styles.examItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.examTypeTitle}>{type} Exam Date</Text>
+                      <Text style={[styles.examTypeTitle, {color: colors.text}]}>{type} Exam Date</Text>
                       {record?.exam_date ? (
-                        <Text style={styles.examCountdown}>{getCountdown(record.exam_date)} ({record.exam_date})</Text>
+                        <Text style={[styles.examCountdown, {color: colors.accent}]}>{getCountdown(record.exam_date)} ({record.exam_date})</Text>
                       ) : (
-                        <Text style={styles.emptyText}>No date set</Text>
+                        <Text style={[styles.emptyText, {color: colors.subText}]}>No date set</Text>
                       )}
                     </View>
-                    <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowExamPicker(type)}>
-                      <Ionicons name="calendar-outline" size={20} color="#00796B" />
+                    <TouchableOpacity style={[styles.datePickerBtn, {backgroundColor: colors.card, borderColor: colors.border}]} onPress={() => setShowExamPicker(type)}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.accent} />
                     </TouchableOpacity>
                     {showExamPicker === type && (
                       <DateTimePicker
@@ -299,186 +296,208 @@ export default function CourseDetailScreen({ route }) {
                 );
               })}
             </View>
-          </>
+          </View>
         )}
 
         {activeTab === 'Study' && (
-          <View style={[styles.card, styles.shadow]}>
+          <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="library-outline" size={22} color="#4DB6AC" />
-              <Text style={styles.cardLabel}>Syllabus Mastery</Text>
+              <Ionicons name="library-outline" size={22} color={colors.accent} />
+              <Text style={[styles.cardLabel, {color: colors.accent}]}>Syllabus Mastery</Text>
             </View>
 
-            <View style={styles.masteryBox}>
-              <Text style={styles.goalValue}>{Math.round(masteryPercent)}%</Text>
-              <Text style={styles.goalLabel}>Course Preparedness</Text>
+            <View style={[styles.masteryBox, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+              <Text style={[styles.goalValue, {color: colors.accent}]}>{Math.round(masteryPercent)}%</Text>
+              <Text style={[styles.goalLabel, {color: colors.text}]}>Course Preparedness</Text>
             </View>
 
             {revisionTopics.map((topic) => (
-              <TouchableOpacity key={topic.id} style={styles.topicRow} onPress={() => handleToggleTopic(topic.id, topic.completed)}>
-                <Ionicons name={topic.completed ? "checkmark-circle" : "ellipse-outline"} size={24} color={topic.completed ? "#4CAF50" : "#ccc"} />
+              <TouchableOpacity key={topic.id} style={[styles.topicRow, {borderBottomColor: colors.border}]} onPress={() => handleToggleTopic(topic.id, topic.completed)}>
+                <Ionicons name={topic.completed ? "checkmark-circle" : "ellipse-outline"} size={24} color={topic.completed ? colors.success : colors.subText} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={[styles.topicName, topic.completed && styles.topicDone]}>{topic.topic}</Text>
-                  <View style={[styles.importanceBadge, { backgroundColor: topic.importance === 'high' ? '#FFEBEE' : '#F5F5F5' }]}>
-                    <Text style={[styles.importanceText, { color: topic.importance === 'high' ? '#D32F2F' : '#757575' }]}>{topic.importance.toUpperCase()}</Text>
+                  <Text style={[styles.topicName, {color: colors.text}, topic.completed && styles.topicDone]}>{topic.topic}</Text>
+                  <View style={[styles.importanceBadge, { backgroundColor: topic.importance === 'high' ? colors.error : colors.secondary, borderColor: colors.border }]}>
+                    <Text style={[styles.importanceText, { color: topic.importance === 'high' ? colors.buttonText : colors.text }]}>{topic.importance.toUpperCase()}</Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => { deleteRevisionTopic(topic.id); loadData(); }}>
-                  <Ionicons name="close-outline" size={20} color="#ccc" />
+                  <Ionicons name="close-outline" size={20} color={colors.subText} />
                 </TouchableOpacity>
               </TouchableOpacity>
             ))}
 
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Add Syllabus Topic</Text>
-              <TextInput style={styles.inputField} placeholder="e.g. Chapter 4: Calculus" value={newTopic} onChangeText={setNewTopic} />
+            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+              <Text style={[styles.formTitle, {color: colors.text}]}>Add Syllabus Topic</Text>
+              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="e.g. Chapter 4: Calculus" placeholderTextColor="#666" value={newTopic} onChangeText={setNewTopic} />
               <View style={styles.typeRow}>
                 {['low', 'medium', 'high'].map(imp => (
-                  <TouchableOpacity key={imp} style={[styles.typeBtn, topicImportance === imp && styles.typeBtnActive]} onPress={() => setTopicImportance(imp)}>
-                    <Text style={[styles.typeBtnText, topicImportance === imp && styles.typeBtnTextActive]}>{imp}</Text>
+                  <TouchableOpacity key={imp} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, topicImportance === imp && {backgroundColor: colors.text}]} onPress={() => setTopicImportance(imp)}>
+                    <Text style={[styles.typeBtnText, {color: colors.text}, topicImportance === imp && {color: colors.background}]}>{imp}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleAddTopic}><Text style={styles.primaryButtonText}>Add to Study Plan</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddTopic}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Study Plan</Text></TouchableOpacity>
             </View>
           </View>
         )}
 
         {activeTab === 'Grades' && (
-          <View style={[styles.card, styles.shadow]}>
+          <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <View style={styles.sectionHeader}>
-              <FontAwesome5 name="layer-group" size={18} color="#4DB6AC" />
-              <Text style={styles.cardLabel}>Assessment Breakdown</Text>
+              <FontAwesome5 name="layer-group" size={18} color={colors.accent} />
+              <Text style={[styles.cardLabel, {color: colors.accent}]}>Assessment Breakdown</Text>
             </View>
 
-            {theoryAssessments.length > 0 && <Text style={styles.subCategoryTitle}>Theory / Lecture</Text>}
+            {theoryAssessments.length > 0 && <Text style={[styles.subCategoryTitle, {color: colors.accent, borderBottomColor: colors.border}]}>Theory / Lecture</Text>}
             {theoryAssessments.map(a => (
-              <View key={a.id} style={styles.gradeRow}>
+              <View key={a.id} style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.gradeName}>{a.name} ({a.weight}%)</Text>
-                  <Text style={styles.gradeSub}>Final: {a.obtained_marks}/{a.total_marks}{a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}</Text>
+                  <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>Final: {a.obtained_marks}/{a.total_marks}{a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}</Text>
                 </View>
-                <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}><Ionicons name="trash-outline" size={18} color="#D32F2F" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}><Ionicons name="trash-outline" size={18} color={colors.error} /></TouchableOpacity>
               </View>
             ))}
 
-            {labAssessments.length > 0 && <Text style={styles.subCategoryTitle}>Lab Section</Text>}
+            {labAssessments.length > 0 && <Text style={[styles.subCategoryTitle, {color: colors.accent, borderBottomColor: colors.border}]}>Lab Section</Text>}
             {labAssessments.map(a => (
-              <View key={a.id} style={styles.gradeRow}>
+              <View key={a.id} style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.gradeName}>{a.name} ({a.weight}%)</Text>
-                  <Text style={styles.gradeSub}>Final: {a.obtained_marks}/{a.total_marks}{a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}</Text>
+                  <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>Final: {a.obtained_marks}/{a.total_marks}{a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}</Text>
                 </View>
-                <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}><Ionicons name="trash-outline" size={18} color="#D32F2F" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}><Ionicons name="trash-outline" size={18} color={colors.error} /></TouchableOpacity>
               </View>
             ))}
 
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Add New Record</Text>
+            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+              <Text style={[styles.formTitle, {color: colors.text}]}>Add New Record</Text>
               <View style={styles.typeRow}>
                 {['Theory', 'Lab'].map(cat => (
-                  <TouchableOpacity key={cat} style={[styles.typeBtn, assessCategory === cat && styles.typeBtnActive]} onPress={() => setAssessCategory(cat)}>
-                    <Text style={[styles.typeBtnText, assessCategory === cat && styles.typeBtnTextActive]}>{cat}</Text>
+                  <TouchableOpacity key={cat} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, assessCategory === cat && {backgroundColor: colors.text}]} onPress={() => setAssessCategory(cat)}>
+                    <Text style={[styles.typeBtnText, {color: colors.text}, assessCategory === cat && {color: colors.background}]}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput style={styles.inputField} placeholder="Assessment Name" value={assessName} onChangeText={setAssessName} />
+              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Assessment Name" placeholderTextColor="#666" value={assessName} onChangeText={setAssessName} />
               <View style={styles.inputRow}>
-                <View style={{ flex: 1 }}><Text style={styles.miniLabel}>Raw Mark</Text><TextInput style={styles.inputField} placeholder="8.4" value={assessOriginal} onChangeText={setAssessOriginal} keyboardType="numeric" /></View>
-                <View style={{ flex: 1 }}><Text style={styles.miniLabel}>Official Mark</Text><TextInput style={styles.inputField} placeholder="9" value={assessObtained} onChangeText={setAssessObtained} keyboardType="numeric" /></View>
+                <View style={{ flex: 1 }}><Text style={[styles.miniLabel, {color: colors.subText}]}>Raw Mark</Text><TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="8.4" placeholderTextColor="#666" value={assessOriginal} onChangeText={setAssessOriginal} keyboardType="numeric" /></View>
+                <View style={{ flex: 1 }}><Text style={[styles.miniLabel, {color: colors.subText}]}>Official Mark</Text><TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="9" placeholderTextColor="#666" value={assessObtained} onChangeText={setAssessObtained} keyboardType="numeric" /></View>
               </View>
               <View style={styles.inputRow}>
-                <TextInput style={[styles.inputField, { flex: 1 }]} placeholder="Total Possible" value={assessTotal} onChangeText={setAssessTotal} keyboardType="numeric" />
-                <TextInput style={[styles.inputField, { flex: 1 }]} placeholder="Weight %" value={assessWeight} onChangeText={setAssessWeight} keyboardType="numeric" />
+                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total Possible" placeholderTextColor="#666" value={assessTotal} onChangeText={setAssessTotal} keyboardType="numeric" />
+                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Weight %" placeholderTextColor="#666" value={assessWeight} onChangeText={setAssessWeight} keyboardType="numeric" />
               </View>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleAddAssessment}><Text style={styles.primaryButtonText}>Save Grade</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddAssessment}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Grade</Text></TouchableOpacity>
             </View>
           </View>
         )}
 
         {activeTab === 'Attendance' && (
-          <View style={[styles.card, styles.shadow]}>
+          <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <View style={styles.sectionHeader}>
-              <MaterialIcons name="event-busy" size={22} color="#4DB6AC" />
-              <Text style={styles.cardLabel}>Absence Log</Text>
+              <MaterialIcons name="event-busy" size={22} color={colors.accent} />
+              <Text style={[styles.cardLabel, {color: colors.accent}]}>Absence Log</Text>
             </View>
 
             {attendance ? (
               <View style={styles.attendanceSummary}>
-                <View style={styles.statBox}>
-                    <Text style={styles.statValue}>{absenceDates.length}/{attendance.allowed_absence}</Text>
-                    <Text style={styles.statLabel}>Used</Text>
+                <View style={[styles.statBox, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                    <Text style={[styles.statValue, {color: colors.text}]}>{absenceDates.length}/{attendance.allowed_absence}</Text>
+                    <Text style={[styles.statLabel, {color: colors.text}]}>Used</Text>
                 </View>
                 <View style={styles.progressContainerMain}>
-                  <View style={styles.progressBg}><View style={[styles.progressFill, { width: `${(absenceDates.length / attendance.allowed_absence) * 100}%`, backgroundColor: (attendance.allowed_absence - absenceDates.length) <= 2 ? '#D32F2F' : '#00796B' }]} /></View>
-                  <Text style={styles.remainingText}>{attendance.allowed_absence - absenceDates.length} more absences allowed</Text>
+                  <View style={[styles.progressContainer, {backgroundColor: colors.secondary, borderColor: colors.border}]}><View style={[styles.progressFill, { width: `${(absenceDates.length / attendance.allowed_absence) * 100}%`, backgroundColor: (attendance.allowed_absence - absenceDates.length) <= 2 ? colors.error : colors.accent }]} /></View>
+                  <Text style={[styles.remainingText, {color: colors.text}]}>{attendance.allowed_absence - absenceDates.length} more absences allowed</Text>
                 </View>
               </View>
-            ) : <Text style={styles.emptyText}>Set up attendance below</Text>}
+            ) : <Text style={[styles.emptyText, {color: colors.subText}]}>Set up attendance below</Text>}
 
             {absenceDates.map((d) => (
-              <View key={d.id} style={styles.historyRow}>
-                <View style={{ flex: 1 }}><Text style={styles.historyDate}>{d.date}</Text></View>
-                <TouchableOpacity onPress={() => { deleteAbsenceDate(d.id); loadData(); }}><Ionicons name="trash-outline" size={18} color="#D32F2F" /></TouchableOpacity>
+              <View key={d.id} style={[styles.historyRow, {borderBottomColor: colors.border}]}>
+                <View style={{ flex: 1 }}><Text style={[styles.historyDate, {color: colors.text}]}>{d.date}</Text></View>
+                <TouchableOpacity onPress={() => { deleteAbsenceDate(d.id); loadData(); }}><Ionicons name="trash-outline" size={18} color={colors.error} /></TouchableOpacity>
               </View>
             ))}
 
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Report Absence</Text>
-              <TouchableOpacity style={styles.inputField} onPress={() => setShowDatePicker(true)}>
-                 <Ionicons name="calendar-outline" size={20} color="#757575" />
-                 <Text style={styles.inputText}>{absenceDate.toISOString().split('T')[0]}</Text>
+            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+              <Text style={[styles.formTitle, {color: colors.text}]}>Report Absence</Text>
+              <TouchableOpacity style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border}]} onPress={() => setShowDatePicker(true)}>
+                 <Ionicons name="calendar-outline" size={20} color={colors.subText} />
+                 <Text style={[styles.inputText, {color: colors.text}]}>{absenceDate.toISOString().split('T')[0]}</Text>
               </TouchableOpacity>
               {showDatePicker && <DateTimePicker value={absenceDate} mode="date" display="default" maximumDate={new Date()} onChange={(event, d) => { setShowDatePicker(false); if(d) setAbsenceDate(d); }} />}
-              <TouchableOpacity style={styles.primaryButton} onPress={handleLogAbsence}><Text style={styles.primaryButtonText}>Add to History</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleLogAbsence}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to History</Text></TouchableOpacity>
             </View>
 
-            <View style={styles.divider} />
-            <Text style={styles.formTitle}>Attendance Policy</Text>
+            <View style={[styles.divider, {backgroundColor: colors.text}]} />
+            <Text style={[styles.formTitle, {color: colors.text}]}>Attendance Policy</Text>
             <View style={styles.inputRow}>
-              <TextInput style={[styles.inputField, { flex: 1 }]} placeholder="Total Classes" value={totalClasses} onChangeText={setTotalClasses} keyboardType="numeric" />
-              <TextInput style={[styles.inputField, { flex: 1 }]} placeholder="Allowed Absences" value={allowedAbsence} onChangeText={setAllowedAbsence} keyboardType="numeric" />
+              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total Classes" placeholderTextColor="#666" value={totalClasses} onChangeText={setTotalClasses} keyboardType="numeric" />
+              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Allowed Absences" placeholderTextColor="#666" value={allowedAbsence} onChangeText={setAllowedAbsence} keyboardType="numeric" />
             </View>
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveAttendance}><Text style={styles.secondaryButtonText}>Update Policy</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.secondaryButton, {borderColor: colors.accent}]} onPress={handleSaveAttendance}><Text style={[styles.secondaryButtonText, {color: colors.accent}]}>Update Policy</Text></TouchableOpacity>
           </View>
         )}
 
         {activeTab === 'Schedule' && (
-          <View style={[styles.card, styles.shadow]}>
+          <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="calendar" size={22} color="#4DB6AC" />
-              <Text style={styles.cardLabel}>Weekly Plan</Text>
+              <Ionicons name="calendar" size={22} color={colors.accent} />
+              <Text style={[styles.cardLabel, {color: colors.accent}]}>Weekly Plan</Text>
             </View>
 
             {scheduleEntries.map((s) => (
-              <View key={s.id} style={styles.scheduleItem}>
-                <View style={[styles.typeBadge, { backgroundColor: s.class_type === 'Lab' ? '#FF9800' : '#00796B' }]}><Text style={styles.typeBadgeText}>{s.class_type}</Text></View>
+              <View key={s.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                <View style={[styles.typeBadge, { backgroundColor: s.class_type === 'Lab' ? colors.warning : colors.accent, borderColor: colors.border }]}><Text style={[styles.typeBadgeText, {color: colors.buttonText}]}>{s.class_type}</Text></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.timeText}>{s.day_of_week} · {s.start_time} - {s.end_time}</Text>
-                  <Text style={styles.roomText}>{s.room || 'TBA'}</Text>
+                  <Text style={[styles.timeText, {color: colors.text}]}>{s.day_of_week} · {s.start_time} - {s.end_time}</Text>
+                  <Text style={[styles.roomText, {color: colors.subText}]}>{s.room || 'TBA'}</Text>
                 </View>
-                <TouchableOpacity onPress={() => { deleteScheduleEntry(s.id); loadData(); }}><Ionicons name="close-circle" size={20} color="#D32F2F" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => { deleteScheduleEntry(s.id); loadData(); }}><Ionicons name="close-circle" size={20} color={colors.error} /></TouchableOpacity>
               </View>
             ))}
 
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Add Class Time</Text>
+            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+              <Text style={[styles.formTitle, {color: colors.text}]}>Add Class Time</Text>
               <View style={styles.typeRow}>
                 {TYPES.map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeBtn, selectedType === t && styles.typeBtnActive]} onPress={() => setSelectedType(t)}>
-                    <Text style={[styles.typeBtnText, selectedType === t && styles.typeBtnTextActive]}>{t}</Text>
+                  <TouchableOpacity key={t} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, selectedType === t && {backgroundColor: colors.text}]} onPress={() => setSelectedType(t)}>
+                    <Text style={[styles.typeBtnText, {color: colors.text}, selectedType === t && {color: colors.background}]}>{t}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <View style={styles.dayRow}>
                 {DAYS.map(d => (
-                  <TouchableOpacity key={d} style={[styles.dayChip, selectedDay === d && styles.dayChipActive]} onPress={() => setSelectedDay(d)}>
-                    <Text style={[styles.dayChipText, selectedDay === d && styles.dayChipTextActive]}>{d.slice(0,3)}</Text>
+                  <TouchableOpacity key={d} style={[styles.dayChip, {backgroundColor: colors.card, borderColor: colors.border}, selectedDay === d && {backgroundColor: colors.accent, borderColor: colors.accent}]} onPress={() => setSelectedDay(d)}>
+                    <Text style={[styles.dayChipText, {color: colors.text}, selectedDay === d && {color: colors.buttonText}]}>{d.slice(0,3)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput style={styles.inputField} placeholder="Room / Location" value={room} onChangeText={setRoom} />
-              <TouchableOpacity style={styles.primaryButton} onPress={handleAddSchedule}><Text style={styles.primaryButtonText}>Add to Schedule</Text></TouchableOpacity>
+              <View style={styles.inputRow}>
+                <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowStartPicker(true)}>
+                  <Text style={[styles.inputText, {color: colors.text}]}>Start: {startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowEndPicker(true)}>
+                  <Text style={[styles.inputText, {color: colors.text}]}>End: {endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showStartPicker && (
+                <DateTimePicker
+                  value={startTime} mode="time" display="default"
+                  onChange={(event, date) => { setShowStartPicker(false); if(date) setStartTime(date); }}
+                />
+              )}
+              {showEndPicker && (
+                <DateTimePicker
+                  value={endTime} mode="time" display="default"
+                  onChange={(event, date) => { setShowEndPicker(false); if(date) setEndTime(date); }}
+                />
+              )}
+
+              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Room / Location" placeholderTextColor="#666" value={room} onChangeText={setRoom} />
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddSchedule}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Schedule</Text></TouchableOpacity>
             </View>
           </View>
         )}
@@ -487,81 +506,80 @@ export default function CourseDetailScreen({ route }) {
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: { flexDirection: 'row', backgroundColor: '#1E1E1E', borderRadius: 12, padding: 4, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
+const createStyles = (colors) => StyleSheet.create({
+  tabBar: { flexDirection: 'row', borderRadius: 12, padding: 4, marginBottom: 20, borderWidth: 2 },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, gap: 4 },
-  tabBtnActive: { backgroundColor: '#004D40' },
-  tabBtnText: { fontSize: 10, color: '#B0B0B0', fontWeight: 'bold' },
-  tabBtnTextActive: { color: '#4DB6AC' },
-  container: { flex: 1, backgroundColor: '#121212', padding: 20 },
-  shadow: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  tabBtnText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+  container: { flex: 1, padding: 20 },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 0
+  },
   headerArea: { marginBottom: 20 },
-  header: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' },
-  subheader: { fontSize: 16, color: '#B0B0B0', marginTop: 4 },
-  card: { backgroundColor: '#1E1E1E', borderRadius: 16, padding: 16, marginBottom: 20 },
+  header: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  subheader: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', marginTop: 4 },
+  card: { borderRadius: 15, padding: 18, marginBottom: 20, borderWidth: 2 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
-  cardLabel: { fontSize: 16, fontWeight: 'bold', color: '#4DB6AC' },
+  cardLabel: { fontSize: 15, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  goalLabel: { fontSize: 12, color: '#B0B0B0', textTransform: 'uppercase', letterSpacing: 1 },
-  goalValue: { fontSize: 32, fontWeight: 'bold', color: '#4DB6AC' },
+  goalLabel: { fontSize: 10, textTransform: 'uppercase', fontWeight: '900' },
+  goalValue: { fontSize: 36, fontWeight: '900' },
   targetBox: { alignItems: 'flex-end' },
-  targetInput: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#333333', textAlign: 'right', width: 60 },
-  progressContainer: { height: 8, backgroundColor: '#333333', borderRadius: 4, overflow: 'hidden', marginBottom: 12 },
+  targetInput: { fontSize: 24, fontWeight: '900', borderBottomWidth: 3, textAlign: 'right', width: 60 },
+  progressContainer: { height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 12, borderWidth: 1.5 },
   progressContainerMain: { flex: 1 },
-  progressBg: { flex: 1, height: 8, backgroundColor: '#333333', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%' },
-  remainingText: { fontSize: 12, marginTop: 6, color: '#B0B0B0', fontWeight: '600' },
+  remainingText: { fontSize: 12, marginTop: 6, fontWeight: '800' },
   attendanceSummary: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 15 },
-  statBox: { alignItems: 'center', backgroundColor: '#004D40', padding: 10, borderRadius: 12, minWidth: 80 },
-  statValue: { fontSize: 18, fontWeight: 'bold', color: '#4DB6AC' },
-  statLabel: { fontSize: 11, color: '#4DB6AC', textTransform: 'uppercase' },
+  statBox: { alignItems: 'center', padding: 12, borderRadius: 12, minWidth: 85, borderWidth: 2 },
+  statValue: { fontSize: 20, fontWeight: '900' },
+  statLabel: { fontSize: 9, textTransform: 'uppercase', fontWeight: '900' },
   historySection: { marginTop: 10, marginBottom: 15 },
-  historyTitle: { fontSize: 14, fontWeight: 'bold', color: '#E0E0E0', marginBottom: 8 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#262626' },
-  historyDate: { fontSize: 14, color: '#E0E0E0' },
-  historyReason: { fontSize: 12, color: '#9E9E9E' },
-  divider: { height: 1, backgroundColor: '#262626', marginVertical: 15 },
-  secondaryButton: { backgroundColor: '#1E1E1E', padding: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#4DB6AC', marginTop: 10 },
-  secondaryButtonText: { color: '#4DB6AC', fontWeight: 'bold', fontSize: 13 },
-  miniLabel: { fontSize: 11, color: '#B0B0B0', marginBottom: 4, textTransform: 'uppercase' },
-  subCategoryTitle: { fontSize: 15, fontWeight: 'bold', color: '#4DB6AC', marginTop: 15, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#004D40' },
-  originalMarkText: { color: '#FF5252', fontStyle: 'italic', fontWeight: 'normal' },
-  coachText: { fontSize: 14, fontWeight: '600', color: '#E0E0E0', lineHeight: 20 },
-  gradeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#262626' },
-  gradeName: { fontSize: 15, fontWeight: 'bold', color: '#FFFFFF' },
-  gradeSub: { fontSize: 13, color: '#B0B0B0' },
+  historyTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  historyDate: { fontSize: 14, fontWeight: '700' },
+  historyReason: { fontSize: 12 },
+  divider: { height: 2, marginVertical: 15, borderStyle: 'dashed' },
+  secondaryButton: { padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, marginTop: 10 },
+  secondaryButtonText: { fontWeight: '900', fontSize: 13, textTransform: 'uppercase' },
+  miniLabel: { fontSize: 10, marginBottom: 4, textTransform: 'uppercase', fontWeight: '900' },
+  subCategoryTitle: { fontSize: 15, fontWeight: '900', marginTop: 15, marginBottom: 8, textTransform: 'uppercase', borderBottomWidth: 2 },
+  originalMarkText: { color: '#E63946', fontStyle: 'italic', fontWeight: '900' },
+  coachText: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
+  gradeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+  gradeName: { fontSize: 16, fontWeight: '900' },
+  gradeSub: { fontSize: 13, fontWeight: '700' },
   miniMasteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 5 },
-  masteryText: { fontSize: 13, fontWeight: 'bold', color: '#81C784' },
-  masteryBox: { alignItems: 'center', backgroundColor: '#1B3121', padding: 20, borderRadius: 16, marginBottom: 20 },
-  topicRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#262626' },
-  topicName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-  topicDone: { textDecorationLine: 'line-through', color: '#666666' },
-  importanceBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4 },
-  importanceText: { fontSize: 10, fontWeight: 'bold' },
-  formContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#333333' },
-  inputField: { backgroundColor: '#262626', borderRadius: 10, padding: 12, marginBottom: 10, color: '#FFFFFF', borderColor: '#333333', borderWidth: 1 },
+  masteryText: { fontSize: 13, fontWeight: '900' },
+  masteryBox: { alignItems: 'center', padding: 20, borderRadius: 15, marginBottom: 20, borderWidth: 2 },
+  topicRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+  topicName: { fontSize: 15, fontWeight: '800' },
+  topicDone: { textDecorationLine: 'line-through', opacity: 0.5 },
+  importanceBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginTop: 6, borderWidth: 1 },
+  importanceText: { fontSize: 9, fontWeight: '900' },
+  formContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 2 },
+  inputField: { borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 2, fontWeight: '700' },
   inputRow: { flexDirection: 'row', gap: 10 },
-  primaryButton: { backgroundColor: '#4DB6AC', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 5 },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
-  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, backgroundColor: '#262626', padding: 10, borderRadius: 12 },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  typeBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
-  timeText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
-  roomText: { fontSize: 12, color: '#B0B0B0' },
+  primaryButton: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 5 },
+  primaryButtonText: { fontWeight: '900', textTransform: 'uppercase' },
+  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, padding: 12, borderRadius: 12, borderWidth: 2 },
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1 },
+  typeBadgeText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  timeText: { fontSize: 14, fontWeight: '900' },
+  roomText: { fontSize: 12, fontWeight: '700' },
   typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  typeBtn: { flex: 1, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#333333', alignItems: 'center', backgroundColor: '#1E1E1E' },
-  typeBtnActive: { backgroundColor: '#4DB6AC', borderColor: '#4DB6AC' },
-  typeBtnText: { color: '#B0B0B0', fontSize: 12, fontWeight: 'bold' },
-  typeBtnTextActive: { color: '#FFFFFF' },
+  typeBtn: { flex: 1, padding: 10, borderRadius: 10, borderWidth: 2, alignItems: 'center' },
+  typeBtnText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  dayChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#333333', backgroundColor: '#1E1E1E' },
-  dayChipActive: { backgroundColor: '#004D40', borderColor: '#4DB6AC' },
-  dayChipText: { fontSize: 12, color: '#B0B0B0' },
-  dayChipTextActive: { color: '#4DB6AC', fontWeight: 'bold' },
-  examItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#262626', padding: 12, borderRadius: 12, marginBottom: 10 },
-  examTypeTitle: { fontSize: 15, fontWeight: 'bold', color: '#FFFFFF' },
-  examCountdown: { fontSize: 13, color: '#FFB74D', fontWeight: '600' },
-  datePickerBtn: { padding: 8, backgroundColor: '#004D40', borderRadius: 8 },
-  inputText: { color: '#FFFFFF' },
-  emptyText: { color: '#666666', fontStyle: 'italic' },
+  dayChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 2 },
+  dayChipText: { fontSize: 11, fontWeight: '900' },
+  examItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 10, borderWidth: 2 },
+  examTypeTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  examCountdown: { fontSize: 12, fontWeight: '900' },
+  datePickerBtn: { padding: 8, borderRadius: 8, borderWidth: 1.5 },
+  inputText: { fontWeight: '700' },
+  emptyText: { fontStyle: 'italic', fontWeight: '700' },
 });
