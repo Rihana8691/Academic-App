@@ -373,14 +373,61 @@ export function updateCourseTarget(courseId, targetScore) {
 export function getGoalAnalysis(courseId) {
   const course = db.getFirstSync(`SELECT target_score FROM courses WHERE id = ?;`, [courseId]);
   const assessments = db.getAllSync(`SELECT * FROM assessments WHERE course_id = ?;`, [courseId]);
+  const groups = db.getAllSync(`SELECT * FROM assessment_groups WHERE course_id = ?;`, [courseId]);
+  const exams = db.getAllSync(`SELECT * FROM exams WHERE course_id = ?;`, [courseId]);
 
   let currentContribution = 0;
   let weightUsed = 0;
 
+  // Track whichAssessments are in groups to avoid double counting
+  const groupedAssessmentIds = new Set();
+  groups.forEach(group => {
+    const groupItems = db.getAllSync(`SELECT assessment_id FROM assessment_group_items WHERE group_id = ?;`, [group.id]);
+    groupItems.forEach(item => groupedAssessmentIds.add(item.assessment_id));
+    
+    // Use group weight directly
+    if (group.weight > 0) {
+      let groupScore = 0;
+      const items = getAssessmentGroupItems(group.id);
+      
+      // Calculate group score from individual assessments
+      const totalObtained = items.reduce((sum, item) => sum + (item.obtained_marks || 0), 0);
+      const totalPossible = items.reduce((sum, item) => sum + (item.total_marks || 0), 0);
+      
+      // Use rounded score if available, otherwise use calculated score
+      if (group.rounded_score !== null && group.rounded_total !== null && group.rounded_total > 0) {
+        groupScore = group.rounded_score / group.rounded_total;
+      } else if (totalPossible > 0) {
+        groupScore = totalObtained / totalPossible;
+      }
+      
+      currentContribution += (groupScore * group.weight);
+      weightUsed += group.weight;
+    }
+  });
+
   assessments.forEach(a => {
-    const score = a.total_marks > 0 ? (a.obtained_marks / a.total_marks) : 0;
-    currentContribution += (score * a.weight);
+    // Skip if this assessment is in a group (already counted)
+    if (groupedAssessmentIds.has(a.id)) return;
+
+    // Use rounded score if available, otherwise use raw score
+    const obtainedScore = (a.is_rounded && a.rounded_score !== null && a.rounded_total !== null) 
+      ? a.rounded_score / a.rounded_total 
+      : (a.total_marks > 0 ? a.obtained_marks / a.total_marks : 0);
+    
+    currentContribution += (obtainedScore * a.weight);
     weightUsed += a.weight;
+  });
+
+  // Add exams to calculation
+  exams.forEach(e => {
+    if (e.obtained_marks !== null && e.total_marks !== null && e.total_marks > 0 && e.weight > 0) {
+      const examScore = (e.is_rounded && e.rounded_score !== null && e.rounded_total !== null)
+        ? e.rounded_score / e.rounded_total
+        : e.obtained_marks / e.total_marks;
+      currentContribution += (examScore * e.weight);
+      weightUsed += e.weight;
+    }
   });
 
   const target = course.target_score || 85;
@@ -432,6 +479,46 @@ export function setExamDate(courseId, examType, examDate) {
   }
 }
 
+export function setExamGrades(courseId, examType, obtainedMarks, totalMarks) {
+  const existing = getExamByType(courseId, examType);
+  if (existing) {
+    db.runSync(`UPDATE exams SET obtained_marks = ?, total_marks = ? WHERE id = ?;`, [obtainedMarks, totalMarks, existing.id]);
+  } else {
+    db.runSync(`INSERT INTO exams (course_id, exam_type, obtained_marks, total_marks) VALUES (?, ?, ?, ?);`, [courseId, examType, obtainedMarks, totalMarks]);
+  }
+}
+
+export function setExamWeight(courseId, examType, weight) {
+  const exam = getExamByType(courseId, examType);
+  if (exam) {
+    db.runSync(`UPDATE exams SET weight = ? WHERE id = ?;`, [weight, exam.id]);
+  }
+}
+
+export function setExamRounding(courseId, examType, roundedScore, roundedTotal, reason) {
+  const exam = getExamByType(courseId, examType);
+  if (!exam) return;
+
+  // Log to history before updating
+  db.runSync(
+    `INSERT INTO rounding_history (assessment_id, raw_score, raw_total, rounded_score, rounded_total, reason) VALUES (?, ?, ?, ?, ?, ?);`,
+    [exam.id, exam.obtained_marks, exam.total_marks, roundedScore, roundedTotal, reason || null]
+  );
+
+  // Update exam with rounded values
+  db.runSync(
+    `UPDATE exams SET rounded_score = ?, rounded_total = ?, is_rounded = 1 WHERE id = ?;`,
+    [roundedScore, roundedTotal, exam.id]
+  );
+}
+
+export function clearExamRounding(courseId, examType) {
+  const exam = getExamByType(courseId, examType);
+  if (exam) {
+    db.runSync(`UPDATE exams SET rounded_score = NULL, rounded_total = NULL, is_rounded = 0 WHERE id = ?;`, [exam.id]);
+  }
+}
+
 // Returns the single nearest upcoming exam (Mid or Final) across all courses
 export function getNearestUpcomingExam() {
   const rows = db.getAllSync(`
@@ -451,10 +538,10 @@ export function getNearestUpcomingExam() {
 
 // ---------- REVISION TOPICS ----------
 
-export function addRevisionTopic(courseId, topic, notes, importance) {
+export function addRevisionTopic(courseId, topic, notes, importance, understandingLevel, revisionNotes, imagePath) {
   const result = db.runSync(
-    `INSERT INTO revision_topics (course_id, topic, notes, importance) VALUES (?, ?, ?, ?);`,
-    [courseId, topic, notes, importance]
+    `INSERT INTO revision_topics (course_id, topic, notes, importance, understanding_level, revision_notes, image_path) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [courseId, topic, notes, importance, understandingLevel || 'not_fully', revisionNotes || null, imagePath || null]
   );
   return result.lastInsertRowId;
 }
@@ -467,8 +554,181 @@ export function toggleRevisionTopic(id, completed) {
   db.runSync(`UPDATE revision_topics SET completed = ? WHERE id = ?;`, [completed ? 1 : 0, id]);
 }
 
+export function updateTopicUnderstanding(id, understandingLevel) {
+  db.runSync(`UPDATE revision_topics SET understanding_level = ? WHERE id = ?;`, [understandingLevel, id]);
+}
+
+export function updateTopicRevisionNotes(id, revisionNotes) {
+  db.runSync(`UPDATE revision_topics SET revision_notes = ? WHERE id = ?;`, [revisionNotes, id]);
+}
+
+export function updateTopicImage(id, imagePath) {
+  db.runSync(`UPDATE revision_topics SET image_path = ? WHERE id = ?;`, [imagePath, id]);
+}
+
+export function getSortedRevisionTopics(courseId) {
+  const understandingOrder = { 'dont_understand': 0, 'not_fully': 1, 'understand': 2 };
+  const importanceOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+  
+  const topics = db.getAllSync(`SELECT * FROM revision_topics WHERE course_id = ?;`, [courseId]);
+  
+  return topics.sort((a, b) => {
+    // First sort by understanding level (don't understand first)
+    const aUnderstanding = understandingOrder[a.understanding_level] || 1;
+    const bUnderstanding = understandingOrder[b.understanding_level] || 1;
+    if (aUnderstanding !== bUnderstanding) {
+      return aUnderstanding - bUnderstanding;
+    }
+    // Then sort by importance (high first)
+    const aImportance = importanceOrder[a.importance] || 1;
+    const bImportance = importanceOrder[b.importance] || 1;
+    if (aImportance !== bImportance) {
+      return aImportance - bImportance;
+    }
+    // Finally by ID
+    return a.id - b.id;
+  });
+}
+
 export function deleteRevisionTopic(id) {
   db.runSync(`DELETE FROM revision_topics WHERE id = ?;`, [id]);
+}
+
+// ---------- TOPIC IMAGES ----------
+
+export function addTopicImage(topicId, imageUri) {
+  const result = db.runSync(
+    `INSERT INTO topic_images (topic_id, image_uri) VALUES (?, ?);`,
+    [topicId, imageUri]
+  );
+  return result.lastInsertRowId;
+}
+
+export function getTopicImages(topicId) {
+  return db.getAllSync(`SELECT * FROM topic_images WHERE topic_id = ? ORDER BY id ASC;`, [topicId]);
+}
+
+export function deleteTopicImage(imageId) {
+  db.runSync(`DELETE FROM topic_images WHERE id = ?;`, [imageId]);
+}
+
+// ---------- ASSESSMENT ROUNDING ----------
+
+export function setAssessmentRounding(assessmentId, roundedScore, roundedTotal, reason) {
+  const assessment = db.getFirstSync(`SELECT * FROM assessments WHERE id = ?;`, [assessmentId]);
+  if (!assessment) return;
+
+  // Log to history before updating
+  db.runSync(
+    `INSERT INTO rounding_history (assessment_id, raw_score, raw_total, rounded_score, rounded_total, reason) VALUES (?, ?, ?, ?, ?, ?);`,
+    [assessmentId, assessment.obtained_marks, assessment.total_marks, roundedScore, roundedTotal, reason || null]
+  );
+
+  // Update assessment with rounded values
+  db.runSync(
+    `UPDATE assessments SET rounded_score = ?, rounded_total = ?, is_rounded = 1 WHERE id = ?;`,
+    [roundedScore, roundedTotal, assessmentId]
+  );
+}
+
+export function clearAssessmentRounding(assessmentId) {
+  db.runSync(`UPDATE assessments SET rounded_score = NULL, rounded_total = NULL, is_rounded = 0 WHERE id = ?;`, [assessmentId]);
+}
+
+// ---------- ASSESSMENT GROUPING ----------
+
+export function createAssessmentGroup(courseId, groupName, weight, roundedScore, roundedTotal) {
+  const result = db.runSync(
+    `INSERT INTO assessment_groups (course_id, group_name, weight, rounded_score, rounded_total) VALUES (?, ?, ?, ?, ?);`,
+    [courseId, groupName, weight, roundedScore, roundedTotal]
+  );
+  return result.lastInsertRowId;
+}
+
+export function updateGroupWeight(groupId, weight) {
+  db.runSync(`UPDATE assessment_groups SET weight = ? WHERE id = ?;`, [weight, groupId]);
+}
+
+export function addAssessmentToGroup(groupId, assessmentId) {
+  const result = db.runSync(
+    `INSERT INTO assessment_group_items (group_id, assessment_id) VALUES (?, ?);`,
+    [groupId, assessmentId]
+  );
+  return result.lastInsertRowId;
+}
+
+export function removeAssessmentFromGroup(groupId, assessmentId) {
+  db.runSync(`DELETE FROM assessment_group_items WHERE group_id = ? AND assessment_id = ?;`, [groupId, assessmentId]);
+}
+
+export function getAssessmentGroups(courseId) {
+  return db.getAllSync(`SELECT * FROM assessment_groups WHERE course_id = ? ORDER BY created_at DESC;`, [courseId]);
+}
+
+export function getAssessmentGroupItems(groupId) {
+  return db.getAllSync(`
+    SELECT assessment_group_items.*, assessments.name, assessments.obtained_marks, assessments.total_marks, assessments.weight
+    FROM assessment_group_items
+    JOIN assessments ON assessment_group_items.assessment_id = assessments.id
+    WHERE assessment_group_items.group_id = ?;
+  `, [groupId]);
+}
+
+export function deleteAssessmentGroup(groupId) {
+  db.runSync(`DELETE FROM assessment_group_items WHERE group_id = ?;`, [groupId]);
+  db.runSync(`DELETE FROM assessment_groups WHERE id = ?;`, [groupId]);
+}
+
+export function updateGroupRounding(groupId, roundedScore, roundedTotal, reason) {
+  const group = db.getFirstSync(`SELECT * FROM assessment_groups WHERE id = ?;`, [groupId]);
+  if (!group) return;
+
+  // Calculate raw total from group items
+  const items = getAssessmentGroupItems(groupId);
+  const rawScore = items.reduce((sum, item) => sum + (item.obtained_marks || 0), 0);
+  const rawTotal = items.reduce((sum, item) => sum + (item.total_marks || 0), 0);
+
+  // Log to history
+  db.runSync(
+    `INSERT INTO rounding_history (group_id, raw_score, raw_total, rounded_score, rounded_total, reason) VALUES (?, ?, ?, ?, ?, ?);`,
+    [groupId, rawScore, rawTotal, roundedScore, roundedTotal, reason || null]
+  );
+
+  // Update group with rounded values
+  db.runSync(
+    `UPDATE assessment_groups SET rounded_score = ?, rounded_total = ? WHERE id = ?;`,
+    [roundedScore, roundedTotal, groupId]
+  );
+}
+
+// ---------- ROUNDING HISTORY ----------
+
+export function getRoundingHistory(assessmentId) {
+  return db.getAllSync(`SELECT * FROM rounding_history WHERE assessment_id = ? ORDER BY created_at DESC;`, [assessmentId]);
+}
+
+export function getGroupRoundingHistory(groupId) {
+  return db.getAllSync(`SELECT * FROM rounding_history WHERE group_id = ? ORDER BY created_at DESC;`, [groupId]);
+}
+
+export function getAllRoundingHistory(courseId) {
+  return db.getAllSync(`
+    SELECT rounding_history.*, 
+           CASE 
+             WHEN rounding_history.assessment_id IS NOT NULL THEN 
+               (SELECT name FROM assessments WHERE id = rounding_history.assessment_id)
+             ELSE 
+               (SELECT group_name FROM assessment_groups WHERE id = rounding_history.group_id)
+           END as item_name,
+           CASE 
+             WHEN rounding_history.assessment_id IS NOT NULL THEN 'Assessment'
+             ELSE 'Group'
+           END as item_type
+    FROM rounding_history
+    WHERE rounding_history.assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)
+       OR rounding_history.group_id IN (SELECT id FROM assessment_groups WHERE course_id = ?)
+    ORDER BY created_at DESC;
+  `, [courseId, courseId]);
 }
 
 // ---------- PERSONAL / PRAYERS ----------
@@ -496,6 +756,171 @@ export function addPersonalNote(text) {
 
 export function deletePersonalNote(id) {
   db.runSync(`DELETE FROM personal_notes WHERE id = ?;`, [id]);
+}
+
+// ---------- HABITS ----------
+
+export function getHabits() {
+  return db.getAllSync(`SELECT * FROM habits ORDER BY created_at ASC;`);
+}
+
+export function addHabit(name, icon, category, priority, reminderTime) {
+  const result = db.runSync(
+    `INSERT INTO habits (name, icon, category, priority, reminder_time) VALUES (?, ?, ?, ?, ?);`,
+    [name, icon || 'checkbox-outline', category || 'Personal', priority || 'medium', reminderTime || null]
+  );
+  return result.lastInsertRowId;
+}
+
+export function deleteHabit(id) {
+  db.runSync(`DELETE FROM habit_tracking WHERE habit_id = ?;`, [id]);
+  db.runSync(`DELETE FROM habits WHERE id = ?;`, [id]);
+}
+
+export function getHabitTracking(habitId, date) {
+  let row = db.getFirstSync(`SELECT * FROM habit_tracking WHERE habit_id = ? AND date = ?;`, [habitId, date]);
+  if (!row) {
+    db.runSync(`INSERT INTO habit_tracking (habit_id, date, completed) VALUES (?, ?, 0);`, [habitId, date]);
+    row = db.getFirstSync(`SELECT * FROM habit_tracking WHERE habit_id = ? AND date = ?;`, [habitId, date]);
+  }
+  return row;
+}
+
+export function toggleHabitTracking(habitId, date, completed) {
+  db.runSync(`UPDATE habit_tracking SET completed = ? WHERE habit_id = ? AND date = ?;`, [completed ? 1 : 0, habitId, date]);
+}
+
+export function getHabitsWithTracking(date) {
+  const habits = getHabits();
+  return habits.map(habit => ({
+    ...habit,
+    tracking: getHabitTracking(habit.id, date),
+    streak: getHabitStreak(habit.id),
+    weekStats: getHabitWeekStats(habit.id)
+  }));
+}
+
+export function getDailyCompletionRate(date) {
+  const habits = getHabits();
+  if (habits.length === 0) return { completed: 0, total: 0, percentage: 0 };
+  
+  let completed = 0;
+  habits.forEach(habit => {
+    const tracking = getHabitTracking(habit.id, date);
+    if (tracking && tracking.completed === 1) {
+      completed++;
+    }
+  });
+  
+  return {
+    completed,
+    total: habits.length,
+    percentage: Math.round((completed / habits.length) * 100)
+  };
+}
+
+export function getHabitStreak(habitId) {
+  const today = new Date();
+  let streak = 0;
+  let currentDate = new Date(today);
+  
+  while (true) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const tracking = db.getFirstSync(
+      `SELECT completed FROM habit_tracking WHERE habit_id = ? AND date = ?;`,
+      [habitId, dateStr]
+    );
+    
+    if (tracking && tracking.completed === 1) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else if (dateStr === today.toISOString().split('T')[0]) {
+      // Today not completed yet, check yesterday
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  
+  return streak;
+}
+
+export function getHabitWeekStats(habitId) {
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  
+  const tracking = db.getAllSync(
+    `SELECT completed FROM habit_tracking WHERE habit_id = ? AND date >= ? AND date <= ?;`,
+    [habitId, weekAgo.toISOString().split('T')[0], today.toISOString().split('T')[0]]
+  );
+  
+  const completed = tracking.filter(t => t.completed === 1).length;
+  const total = tracking.length;
+  
+  return {
+    completed,
+    total,
+    percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+  };
+}
+
+export function getHabitHistory(habitId, startDate, endDate) {
+  return db.getAllSync(
+    `SELECT date, completed FROM habit_tracking WHERE habit_id = ? AND date >= ? AND date <= ? ORDER BY date ASC;`,
+    [habitId, startDate, endDate]
+  );
+}
+
+export function updateHabit(habitId, name, icon, category, priority, reminderTime) {
+  db.runSync(
+    `UPDATE habits SET name = ?, icon = ?, category = ?, priority = ?, reminder_time = ? WHERE id = ?;`,
+    [name, icon, category, priority, reminderTime, habitId]
+  );
+}
+
+export function getHabitsByCategory(category) {
+  return db.getAllSync(`SELECT * FROM habits WHERE category = ? ORDER BY created_at ASC;`, [category]);
+}
+
+export function getHabitsByPriority(priority) {
+  return db.getAllSync(`SELECT * FROM habits WHERE priority = ? ORDER BY created_at ASC;`, [priority]);
+}
+
+export function getHabitsWithReminders() {
+  return db.getAllSync(`SELECT * FROM habits WHERE reminder_time IS NOT NULL ORDER BY reminder_time ASC;`);
+}
+
+// ---------- HABIT TEMPLATES ----------
+
+export function getHabitTemplates() {
+  return db.getAllSync(`SELECT * FROM habit_templates ORDER BY id ASC;`);
+}
+
+export function addHabitTemplate(name, icon, category, priority) {
+  const result = db.runSync(
+    `INSERT INTO habit_templates (name, icon, category, priority) VALUES (?, ?, ?, ?);`,
+    [name, icon || 'checkbox-outline', category || 'Personal', priority || 'medium']
+  );
+  return result.lastInsertRowId;
+}
+
+export function deleteHabitTemplate(id) {
+  db.runSync(`DELETE FROM habit_templates WHERE id = ?;`, [id]);
+}
+
+export function initDefaultHabitTemplates() {
+  const existing = getHabitTemplates();
+  if (existing.length === 0) {
+    addHabitTemplate('Exercise', 'fitness-outline', 'Health', 'high');
+    addHabitTemplate('Read 30 mins', 'book-outline', 'Personal', 'medium');
+    addHabitTemplate('Meditation', 'leaf-outline', 'Health', 'medium');
+    addHabitTemplate('Drink Water', 'water-outline', 'Health', 'low');
+    addHabitTemplate('Study', 'pencil-outline', 'Study', 'high');
+    addHabitTemplate('No Sugar', 'nutrition-outline', 'Health', 'medium');
+    addHabitTemplate('Sleep 8 hours', 'moon-outline', 'Health', 'high');
+    addHabitTemplate('Journal', 'journal-outline', 'Personal', 'low');
+  }
 }
 
 // ---------- THEME SETTINGS ----------

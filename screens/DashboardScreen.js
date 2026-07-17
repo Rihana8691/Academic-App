@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useLayoutEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,6 +17,17 @@ export default function DashboardScreen({ navigation }) {
   const [todaysClasses, setTodaysClasses] = useState([]);
   const [userName, setUserName] = useState('');
   const [expandedYear, setExpandedYear] = useState(null);
+
+  // Sync Header Button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={toggleTheme} style={{ marginRight: 15 }}>
+          <Ionicons name={theme === 'light' ? "moon-outline" : "sunny-outline"} size={24} color={colors.text} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme, colors, toggleTheme]);
 
   const todayDate = new Date().toISOString().split('T')[0];
 
@@ -38,6 +49,17 @@ export default function DashboardScreen({ navigation }) {
     });
     setTodaysClasses(filteredClasses);
   }, []);
+
+  const getNextClass = useCallback(() => {
+    const now = new Date();
+    const upcomingClasses = todaysClasses.filter(c => {
+      const [startH, startM] = c.start_time.split(':').map(Number);
+      const startTime = new Date();
+      startTime.setHours(startH, startM, 0, 0);
+      return startTime >= now;
+    });
+    return upcomingClasses.length > 0 ? upcomingClasses[0] : null;
+  }, [todaysClasses]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,7 +100,7 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.greetingRow}>
             <Text style={[styles.greetingText, {color: colors.subText}]}>{getGreeting()},</Text>
             <TouchableOpacity onPress={toggleTheme} style={styles.themeToggleMini}>
-               <Ionicons name={theme === 'light' ? "moon" : "sunny"} size={18} color={colors.accent} />
+              <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={18} color={colors.accent} />
             </TouchableOpacity>
           </View>
           <Text style={[styles.header, {color: colors.text}]}>{userName}</Text>
@@ -94,22 +116,42 @@ export default function DashboardScreen({ navigation }) {
       </View>
 
       <View style={styles.statRow}>
-        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.section1, borderColor: colors.border}]}>
           <Text style={[styles.statLabel, {color: colors.text}]}>GPA</Text>
-          <Text style={[styles.statValue, {color: colors.accent}]}>{cgpaData.cgpa.toFixed(2)}</Text>
+          <Text style={[styles.statValue, {color: colors.accentDark}]}>{cgpaData.cgpa.toFixed(2)}</Text>
         </View>
-        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.section2, borderColor: colors.border}]}>
           <Text style={[styles.statLabel, {color: colors.text}]}>Credits</Text>
-          <Text style={[styles.statValue, {color: colors.accent}]}>{cgpaData.totalCredits}</Text>
+          <Text style={[styles.statValue, {color: colors.accentDark}]}>{cgpaData.totalCredits}</Text>
         </View>
-        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+        <View style={[styles.statBox, styles.shadow, {backgroundColor: colors.section3, borderColor: colors.border}]}>
           <Text style={[styles.statLabel, {color: colors.text}]}>Pending</Text>
-          <Text style={[styles.statValue, {color: colors.accent}]}>{upcomingTasks.length}</Text>
+          <Text style={[styles.statValue, {color: colors.accentDark}]}>{upcomingTasks.length}</Text>
         </View>
       </View>
 
+      {/* Next Class Section */}
+      {(() => {
+        const nextClass = getNextClass();
+        if (!nextClass) return null;
+        return (
+          <View style={[styles.section, {backgroundColor: colors.section4, borderRadius: 22, padding: 16}]}>
+            <View style={styles.nextClassHeader}>
+              <View>
+                <Text style={[styles.nextClassLabel, {color: colors.subText}]}>Next Class</Text>
+                <Text style={[styles.nextClassTime, {color: colors.accent}]}>{nextClass.start_time}</Text>
+              </View>
+              <View style={[styles.nextClassBadge, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <Text style={[styles.nextClassCourse, {color: colors.text}]}>{nextClass.course_name}</Text>
+                <Text style={[styles.nextClassMeta, {color: colors.subText}]}>{nextClass.class_type} · {nextClass.room || 'TBA'}</Text>
+              </View>
+            </View>
+          </View>
+        );
+      })()}
+
       {deadlines.length > 0 && (
-        <View style={styles.section}>
+        <View style={[styles.section, {backgroundColor: colors.section1, borderRadius: 22, padding: 16}]}>
           <Text style={[styles.sectionTitleMain, {color: colors.text}]}>Upcoming Priorities</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deadlineCarousel}>
             {(() => {
@@ -142,6 +184,60 @@ export default function DashboardScreen({ navigation }) {
           </ScrollView>
         </View>
       )}
+
+      {/* Today's Timeline Section */}
+      {todaysClasses.length > 0 && (
+        <View style={[styles.section, {backgroundColor: colors.section2, borderRadius: 22, padding: 16}]}>
+          <Text style={[styles.sectionTitleMain, {color: colors.text}]}>Today's Timeline</Text>
+          <View style={[styles.timelineContainer, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+            {todaysClasses.map((c, idx) => (
+              <View key={c.id} style={styles.timelineItem}>
+                <View style={styles.timelineLeft}>
+                  <Text style={[styles.timelineTime, {color: colors.text}]}>{c.start_time}</Text>
+                  <View style={[styles.timelineDot, { backgroundColor: c.exceptionStatus === 'cancelled' ? colors.error : colors.accent, borderColor: colors.border }]} />
+                  {idx !== todaysClasses.length - 1 && <View style={[styles.timelineLine, {backgroundColor: colors.border}]} />}
+                </View>
+                <View style={styles.timelineRight}>
+                  <View style={styles.classInfoRow}>
+                    <Text style={[styles.timelineClassName, {color: colors.text}, c.exceptionStatus === 'cancelled' && styles.strike]}>{c.course_name}</Text>
+                    {c.exceptionStatus ? (
+                      <Text style={[styles.badgeTextSmall, {color: colors.card, backgroundColor: colors.text}]}>{c.exceptionStatus.toUpperCase()}</Text>
+                    ) : (
+                      <Text style={[styles.countdownSmall, {color: colors.accent}]}>{getClassCountdown(c.start_time, c.end_time)}</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.timelineMeta, {color: colors.subText}]}>{c.class_type} · {c.room || 'TBA'}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Attendance Summary Section */}
+      <View style={[styles.section, {backgroundColor: colors.section3, borderRadius: 22, padding: 16}]}>
+        <Text style={[styles.sectionTitleMain, {color: colors.text}]}>Attendance</Text>
+        <View style={[styles.attendanceGrid, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          {attendanceSummaries.length > 0 ? (
+            attendanceSummaries.map((a) => (
+              <View key={a.courseId} style={styles.attendanceGridItem}>
+                <View style={styles.attendanceHeader}>
+                  <Text style={[styles.attCourseName, {color: colors.text}]} numberOfLines={1}>{a.courseName}</Text>
+                  <Text style={[styles.attRemaining, {color: a.isWarning ? colors.error : colors.accent}]}>{a.remaining} left</Text>
+                </View>
+                <View style={[styles.attBarBg, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                  <View style={[styles.attBarFill, { width: `${a.percentage}%`, backgroundColor: a.isWarning ? colors.error : colors.accent }]} />
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={{paddingVertical: 10, alignItems: 'center'}}>
+               <Text style={{color: colors.subText, fontSize: 13, fontStyle: 'italic', fontWeight: '700'}}>No attendance records found.</Text>
+               <Text style={{color: colors.subText, fontSize: 11, marginTop: 4}}>Set up your policy in the "Absence" tab of a course.</Text>
+            </View>
+          )}
+        </View>
+      </View>
 
       <Text style={[styles.sectionTitleMain, {color: colors.text}]}>Academic Years</Text>
     </View>
@@ -202,6 +298,13 @@ const createStyles = (colors) => StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '900' },
   section: { marginBottom: 24 },
   sectionTitleMain: { fontSize: 18, fontWeight: '900', marginBottom: 12, textTransform: 'uppercase' },
+  sectionSubtitle: { fontSize: 13, fontWeight: '700', marginBottom: 10, color: '#6d493f' },
+  nextClassHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  nextClassLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  nextClassTime: { fontSize: 24, fontWeight: '900', marginTop: 4 },
+  nextClassBadge: { flex: 1, marginLeft: 16, padding: 12, borderRadius: 12, borderWidth: 2 },
+  nextClassCourse: { fontSize: 14, fontWeight: '900' },
+  nextClassMeta: { fontSize: 12, fontWeight: '700', marginTop: 4 },
   deadlineCarousel: { paddingRight: 20, paddingBottom: 10 },
   deadlineCard: { width: 180, padding: 14, borderRadius: 12, marginRight: 12, borderWidth: 2 },
   deadlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, borderBottomWidth: 1, paddingBottom: 6 },
@@ -212,6 +315,26 @@ const createStyles = (colors) => StyleSheet.create({
   deadlineCourse: { fontSize: 12, fontWeight: '700' },
   deadlineFooter: { flexDirection: 'row', alignItems: 'center', gap: 4, borderTopWidth: 1.5, borderStyle: 'dotted', paddingTop: 8, marginTop: 5 },
   deadlineCountdown: { fontSize: 11, fontWeight: '900' },
+  timelineContainer: { borderRadius: 15, padding: 20, borderWidth: 2 },
+  timelineItem: { flexDirection: 'row', minHeight: 70 },
+  timelineLeft: { width: 60, alignItems: 'center' },
+  timelineTime: { fontSize: 12, fontWeight: '900' },
+  timelineDot: { width: 12, height: 12, borderRadius: 0, borderWidth: 2, transform: [{ rotate: '45deg' }] },
+  timelineLine: { width: 2, flex: 1, marginVertical: 4 },
+  timelineRight: { flex: 1, paddingLeft: 15, paddingBottom: 20 },
+  classInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  timelineClassName: { fontSize: 16, fontWeight: '900' },
+  timelineMeta: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  strike: { textDecorationLine: 'line-through', opacity: 0.5 },
+  countdownSmall: { fontSize: 11, fontWeight: '900' },
+  badgeTextSmall: { fontSize: 10, fontWeight: '900', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  attendanceGrid: { borderRadius: 15, padding: 16, borderWidth: 2 },
+  attendanceGridItem: { marginBottom: 12 },
+  attendanceHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  attCourseName: { fontSize: 13, fontWeight: '800', flex: 1 },
+  attRemaining: { fontSize: 11, fontWeight: '900' },
+  attBarBg: { height: 10, borderRadius: 5, borderWidth: 1.5 },
+  attBarFill: { height: '100%', borderRadius: 3 },
   card: { borderRadius: 15, padding: 18, marginBottom: 12, borderWidth: 2 },
   semesterHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   semesterName: { fontSize: 18, fontWeight: '900' },
