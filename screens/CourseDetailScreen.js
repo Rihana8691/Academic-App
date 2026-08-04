@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import {
   getCourseById,
+  updateCourseDetails,
   getAttendance,
   setAttendance,
   getAssessments,
@@ -14,9 +15,6 @@ import {
   getExamsForCourse,
   setExamDate,
   setExamGrades,
-  setExamWeight,
-  setExamRounding,
-  clearExamRounding,
   addAbsenceDate,
   getAbsenceDates,
   deleteAbsenceDate,
@@ -37,25 +35,20 @@ import {
   addTopicImage,
   getTopicImages,
   deleteTopicImage,
-  setAssessmentRounding,
-  clearAssessmentRounding,
-  createAssessmentGroup,
-  updateGroupWeight,
-  addAssessmentToGroup,
-  removeAssessmentFromGroup,
-  getAssessmentGroups,
-  getAssessmentGroupItems,
-  deleteAssessmentGroup,
-  updateGroupRounding,
-  getAllRoundingHistory
+  addTopicNote,
+  getTopicNotes,
+  deleteTopicNote,
+  addTask,
+  getTasksByCourse,
+  deleteTask,
+  updateTaskStatus
 } from '../dbHelpers';
-import { getCountdown } from '../utils';
 import { useTheme } from '../ThemeContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TYPES = ['Lecture', 'Lab', 'Tutorial'];
 
-export default function CourseDetailScreen({ route }) {
+export default function CourseDetailScreen({ route, navigation }) {
   const { colors, theme } = useTheme();
   const { courseId } = route.params;
 
@@ -71,6 +64,7 @@ export default function CourseDetailScreen({ route }) {
   const [revisionTopics, setRevisionTopics] = useState([]);
   const [examDates, setExamDates] = useState({ Mid: new Date(), Final: new Date() });
   const [showExamPicker, setShowExamPicker] = useState(null);
+  const [courseTasks, setCourseTasks] = useState([]);
 
   // Form states
   const [targetScore, setTargetScore] = useState('');
@@ -84,36 +78,27 @@ export default function CourseDetailScreen({ route }) {
   const [topicImportance, setTopicImportance] = useState('medium');
   const [topicUnderstanding, setTopicUnderstanding] = useState('not_fully');
   const [topicRevisionNotes, setTopicRevisionNotes] = useState('');
+  const [newSeparateNote, setNewSeparateNote] = useState('');
   const [topicImagePaths, setTopicImagePaths] = useState([]);
   const [showUnderstandingModal, setShowUnderstandingModal] = useState(null);
   const [showNotesModal, setShowNotesModal] = useState(null);
-  
-  // Rounding state
-  const [showRoundingModal, setShowRoundingModal] = useState(null);
-  const [roundedScore, setRoundedScore] = useState('');
-  const [roundedTotal, setRoundedTotal] = useState('');
-  const [roundingReason, setRoundingReason] = useState('');
-  
-  // Grouping state
-  const [showGroupingModal, setShowGroupingModal] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [groupWeight, setGroupWeight] = useState('');
-  const [selectedAssessments, setSelectedAssessments] = useState([]);
-  const [assessmentGroups, setAssessmentGroups] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [roundingHistory, setRoundingHistory] = useState([]);
-  
-  // Exam weight state
-  const [showExamWeightModal, setShowExamWeightModal] = useState(null);
-  const [examWeightInput, setExamWeightInput] = useState('');
-  
+
+  // New task form state
+  const [taskName, setTaskName] = useState('');
+  const [taskDeadline, setTaskDeadline] = useState('');
+  const [showTaskDatePicker, setShowTaskDeadlinePicker] = useState(false);
+  const [taskDeadlineDate, setTaskDeadlineDate] = useState(new Date());
+
+  const [isEditingHeader, setIsEditingHeader] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editCredits, setEditCredits] = useState('');
+
   // Exam grades state
   const [midObtained, setMidObtained] = useState('');
   const [midTotal, setMidTotal] = useState('');
-  const [midWeight, setMidWeight] = useState('');
   const [finalObtained, setFinalObtained] = useState('');
   const [finalTotal, setFinalTotal] = useState('');
-  const [finalWeight, setFinalWeight] = useState('');
 
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [selectedType, setSelectedType] = useState('Lecture');
@@ -144,29 +129,20 @@ export default function CourseDetailScreen({ route }) {
     setAssessments(getAssessments(courseId));
     const examList = getExamsForCourse(courseId);
     setExams(examList);
-
-    const dates = { Mid: new Date(), Final: new Date() };
-    examList.forEach(e => {
-      if (e.exam_date) dates[e.exam_type] = new Date(e.exam_date);
-    });
-    setExamDates(dates);
-
     setScheduleEntries(getScheduleByCourse(courseId));
     setRevisionTopics(getSortedRevisionTopics(courseId));
-    setAssessmentGroups(getAssessmentGroups(courseId));
-    
+    setCourseTasks(getTasksByCourse(courseId));
+
     // Load exam grades
     const midExam = exams.find(e => e.exam_type === 'Mid');
     const finalExam = exams.find(e => e.exam_type === 'Final');
     if (midExam) {
       setMidObtained(midExam.obtained_marks?.toString() || '');
       setMidTotal(midExam.total_marks?.toString() || '');
-      setMidWeight(midExam.weight?.toString() || '');
     }
     if (finalExam) {
       setFinalObtained(finalExam.obtained_marks?.toString() || '');
       setFinalTotal(finalExam.total_marks?.toString() || '');
-      setFinalWeight(finalExam.weight?.toString() || '');
     }
   }, [courseId]);
 
@@ -285,78 +261,39 @@ export default function CourseDetailScreen({ route }) {
     loadData();
   }
 
-  async function handleAddImageToTopic(topicId) {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 1,
-      });
+  function handleAddSeparateNote(topicId) {
+    if (!newSeparateNote.trim()) return;
+    addTopicNote(topicId, newSeparateNote.trim());
+    setNewSeparateNote('');
+    loadData();
+  }
 
-      if (!result.canceled) {
-        addTopicImage(topicId, result.assets[0].uri);
-        loadData();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+  function handleDeleteSeparateNote(noteId) {
+    deleteTopicNote(noteId);
+    loadData();
+  }
+
+  function handleAddTaskForCourse() {
+    if (!taskName.trim()) {
+      Alert.alert('Error', 'Please enter a task name.');
+      return;
     }
-  }
-
-  function handleDeleteTopicImage(imageId) {
-    deleteTopicImage(imageId);
+    const deadlineStr = taskDeadlineDate.toISOString().split('T')[0];
+    addTask(taskName.trim(), deadlineStr, courseId, 'medium');
+    setTaskName('');
+    setShowTaskDeadlinePicker(false);
     loadData();
   }
 
-  // Rounding functions
-  function handleSetRounding() {
-    if (!showRoundingModal || !roundedScore || !roundedTotal) return;
-    setAssessmentRounding(showRoundingModal, parseFloat(roundedScore), parseFloat(roundedTotal), roundingReason);
-    setShowRoundingModal(null);
-    setRoundedScore('');
-    setRoundedTotal('');
-    setRoundingReason('');
+  function handleToggleTaskStatus(task) {
+    const newStatus = task.status === 'pending' ? 'done' : 'pending';
+    updateTaskStatus(task.id, newStatus);
     loadData();
   }
 
-  function handleClearRounding(assessmentId) {
-    clearAssessmentRounding(assessmentId);
+  function handleDeleteTask(id) {
+    deleteTask(id);
     loadData();
-  }
-
-  // Grouping functions
-  function handleCreateGroup() {
-    if (!groupName.trim() || selectedAssessments.length === 0) return;
-    const groupId = createAssessmentGroup(courseId, groupName.trim(), parseFloat(groupWeight) || 0, null, null);
-    selectedAssessments.forEach(assessmentId => {
-      addAssessmentToGroup(groupId, assessmentId);
-    });
-    setGroupName('');
-    setGroupWeight('');
-    setSelectedAssessments([]);
-    setShowGroupingModal(false);
-    loadData();
-  }
-
-  function handleToggleAssessmentSelection(assessmentId) {
-    if (selectedAssessments.includes(assessmentId)) {
-      setSelectedAssessments(selectedAssessments.filter(id => id !== assessmentId));
-    } else {
-      setSelectedAssessments([...selectedAssessments, assessmentId]);
-    }
-  }
-
-  function handleDeleteGroup(groupId) {
-    deleteAssessmentGroup(groupId);
-    loadData();
-  }
-
-  function handleSetGroupRounding(groupId, roundedScore, roundedTotal, reason) {
-    updateGroupRounding(groupId, roundedScore, roundedTotal, reason);
-    loadData();
-  }
-
-  function handleShowHistory() {
-    setRoundingHistory(getAllRoundingHistory(courseId));
-    setShowHistoryModal(true);
   }
 
   // Exam grade handlers
@@ -370,29 +307,18 @@ export default function CourseDetailScreen({ route }) {
     loadData();
   }
 
-  function handleSetExamWeight(examType, weight) {
-    setExamWeight(courseId, examType, parseFloat(weight));
-    loadData();
-  }
-
-  function handleSetExamRounding(examType) {
-    const exam = exams.find(e => e.exam_type === examType);
-    if (!exam) return;
-    
-    const obtained = examType === 'Mid' ? midObtained : finalObtained;
-    const total = examType === 'Mid' ? midTotal : finalTotal;
-    
-    setExamRounding(courseId, examType, parseFloat(roundedScore), parseFloat(roundedTotal), roundingReason);
-    setShowRoundingModal(null);
-    setRoundedScore('');
-    setRoundedTotal('');
-    setRoundingReason('');
-    loadData();
-  }
-
-  function handleClearExamRounding(examType) {
-    clearExamRounding(courseId, examType);
-    loadData();
+  function handleClearExamGrades(examType) {
+    Alert.alert('Reset Grade', `Are you sure you want to clear the ${examType} Exam score?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        style: 'destructive',
+        onPress: () => {
+          setExamGrades(courseId, examType, null, null);
+          loadData();
+        }
+      }
+    ]);
   }
 
   function handleToggleTopic(id, currentStatus) {
@@ -400,11 +326,28 @@ export default function CourseDetailScreen({ route }) {
     loadData();
   }
 
+  function handleStartEditingHeader() {
+    setEditName(course.name);
+    setEditCode(course.course_code || '');
+    setEditCredits(course.credit_hours.toString());
+    setIsEditingHeader(true);
+  }
+
+  function handleSaveHeader() {
+    const credits = parseFloat(editCredits);
+    if (!editName.trim() || isNaN(credits)) {
+      Alert.alert('Error', 'Please enter a valid name and credits.');
+      return;
+    }
+    updateCourseDetails(courseId, editName.trim(), editCode.trim(), credits);
+    setIsEditingHeader(false);
+    loadData();
+  }
+
   if (!course || !goalData) return null;
 
   const theoryAssessments = assessments.filter(a => a.category === 'Theory');
   const labAssessments = assessments.filter(a => a.category === 'Lab');
-  const EXAM_TYPES = ['Mid', 'Final'];
 
   const masteredCount = revisionTopics.filter(t => t.completed).length;
   const masteryPercent = revisionTopics.length > 0 ? (masteredCount / revisionTopics.length) * 100 : 0;
@@ -424,8 +367,42 @@ export default function CourseDetailScreen({ route }) {
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <View style={styles.headerArea}>
-        <Text style={[styles.header, {color: colors.text}]}>{course.name}</Text>
-        <Text style={[styles.subheader, {color: colors.subText}]}>{course.course_code || 'N/A'} · {course.credit_hours} Credits</Text>
+        {isEditingHeader ? (
+          <View style={[styles.card, {padding: 10, marginBottom: 10}]}>
+            <TextInput
+              style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text, marginBottom: 8}]}
+              value={editName} onChangeText={setEditName} placeholder="Course Name"
+            />
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
+                value={editCode} onChangeText={setEditCode} placeholder="Course ID"
+              />
+              <TextInput
+                style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
+                value={editCredits} onChangeText={setEditCredits} placeholder="Credits" keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.inputRow}>
+              <TouchableOpacity style={[styles.primaryButton, {flex: 1, backgroundColor: colors.accent}]} onPress={handleSaveHeader}>
+                <Text style={{color: colors.buttonText, fontWeight: '900'}}>SAVE</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {flex: 1, backgroundColor: colors.subText}]} onPress={() => setIsEditingHeader(false)}>
+                <Text style={{color: colors.background, fontWeight: '900'}}>CANCEL</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+            <View style={{flex: 1}}>
+              <Text style={[styles.header, {color: colors.text}]}>{course.name}</Text>
+              <Text style={[styles.subheader, {color: colors.subText}]}>{course.course_code || 'N/A'} · {course.credit_hours} Credits</Text>
+            </View>
+            <TouchableOpacity onPress={handleStartEditingHeader} style={{padding: 8}}>
+              <Ionicons name="create-outline" size={24} color={colors.accent} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <View style={[styles.tabBar, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -485,7 +462,7 @@ export default function CourseDetailScreen({ route }) {
                 <Text style={[styles.cardLabel, {color: colors.accent}]}>Upcoming Exams</Text>
               </View>
 
-              {EXAM_TYPES.map(type => {
+              {['Mid', 'Final'].map(type => {
                 const record = exams.find(e => e.exam_type === type);
                 return (
                   <View key={type} style={[styles.examItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
@@ -532,6 +509,7 @@ export default function CourseDetailScreen({ route }) {
 
             {revisionTopics.map((topic) => {
               const topicImages = getTopicImages(topic.id);
+              const topicNotes = getTopicNotes(topic.id);
               return (
                 <View key={topic.id} style={[styles.topicRow, {borderBottomColor: colors.border}]}>
                   <TouchableOpacity onPress={() => setShowUnderstandingModal(topic.id)}>
@@ -552,19 +530,22 @@ export default function CourseDetailScreen({ route }) {
                       <View style={[styles.importanceBadge, { backgroundColor: topic.importance === 'high' ? colors.error : colors.secondary, borderColor: colors.border }]}>
                         <Text style={[styles.importanceText, { color: topic.importance === 'high' ? colors.buttonText : colors.text }]}>{topic.importance.toUpperCase()}</Text>
                       </View>
-                      {topicImages.length > 0 && (
-                        <TouchableOpacity onPress={() => setShowNotesModal({id: topic.id, type: 'image'})}>
-                          <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                            <Ionicons name="image-outline" size={16} color={colors.accent} />
+                      <TouchableOpacity onPress={() => navigation.navigate('ChapterImages', { topicId: topic.id, topicName: topic.topic })}>
+                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                          <Ionicons name="image-outline" size={16} color={colors.accent} />
+                          {topicImages.length > 0 && (
                             <Text style={[styles.imageCount, {color: colors.accent}]}>{topicImages.length}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                      {topic.revision_notes && (
-                        <TouchableOpacity onPress={() => setShowNotesModal({id: topic.id, type: 'notes'})}>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => navigation.navigate('ChapterNotes', { topicId: topic.id, topicName: topic.topic })}>
+                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
                           <Ionicons name="document-text-outline" size={16} color={colors.accent} />
-                        </TouchableOpacity>
-                      )}
+                          {topicNotes.length > 0 && (
+                            <Text style={[styles.imageCount, {color: colors.accent}]}>{topicNotes.length}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
                     </View>
                   </View>
                   <TouchableOpacity onPress={() => { deleteRevisionTopic(topic.id); loadData(); }}>
@@ -590,7 +571,7 @@ export default function CourseDetailScreen({ route }) {
                     >
                       <Text style={[styles.understandingOptionText, {color: colors.text}]}>
                         {level === 'dont_understand' ? '❓ Don\'t Understand' : 
-                         level === 'not_fully' ? '📚 Not Fully' : '✅ Understand'}
+                         level === 'not_fully' ? '📚 Not Fully' : '✅ Finished'}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -601,53 +582,52 @@ export default function CourseDetailScreen({ route }) {
               </View>
             )}
 
-            {/* Notes/Image Modal */}
+            {/* Notes Modal */}
             {showNotesModal && (
               <View style={[styles.modalOverlay, {backgroundColor: 'rgba(0,0,0,0.5)'}]}>
                 <View style={[styles.modalContent, {backgroundColor: colors.card, borderColor: colors.border}]}>
                   <Text style={[styles.modalTitle, {color: colors.text}]}>
-                    {showNotesModal.type === 'image' ? 'Topic Images' : 'Revision Notes'}
+                    Revision Notes
                   </Text>
-                  {showNotesModal.type === 'image' ? (
-                    <View>
-                      <ScrollView style={styles.imageScroll} horizontal showsHorizontalScrollIndicator={false}>
-                        {getTopicImages(showNotesModal.id).map((img) => (
-                          <View key={img.id} style={styles.imageContainer}>
-                            <Image 
-                              source={{ uri: img.image_uri }} 
-                              style={styles.topicImage} 
-                            />
-                            <TouchableOpacity 
-                              style={[styles.deleteImageBtn, {backgroundColor: colors.error}]}
-                              onPress={() => handleDeleteTopicImage(img.id)}
-                            >
-                              <Ionicons name="close" size={16} color={colors.buttonText} />
-                            </TouchableOpacity>
+                  <View>
+                    <View style={[styles.notesHeader, {borderBottomColor: colors.border}]}>
+                      <Ionicons name="create-outline" size={20} color={colors.accent} />
+                      <Text style={[styles.notesHeaderText, {color: colors.text}]}>Separate Notes</Text>
+                    </View>
+
+                    <ScrollView style={{maxHeight: 300, marginBottom: 15}}>
+                      {getTopicNotes(showNotesModal.id).map((n) => (
+                        <View key={n.id} style={[styles.noteItem, {borderBottomColor: colors.border}]}>
+                          <View style={{flex: 1}}>
+                            <Text style={[styles.noteText, {color: colors.text}]}>{n.note_text}</Text>
+                            <Text style={[styles.noteDate, {color: colors.subText}]}>{new Date(n.created_at).toLocaleDateString()}</Text>
                           </View>
-                        ))}
-                      </ScrollView>
-                      <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.accent}]} onPress={() => handleAddImageToTopic(showNotesModal.id)}>
-                        <Text style={[styles.modalCloseText, {color: colors.buttonText}]}>+ Add Image</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.text}]} onPress={() => setShowNotesModal(null)}>
-                        <Text style={[styles.modalCloseText, {color: colors.background}]}>Close</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View>
-                      <TextInput
-                        style={[styles.notesInput, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
-                        multiline
-                        placeholder="Add revision notes for exam..."
-                        placeholderTextColor="#666"
-                        value={revisionTopics.find(t => t.id === showNotesModal.id)?.revision_notes || ''}
-                        onChangeText={(text) => handleUpdateNotes(showNotesModal.id, text)}
-                      />
-                      <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.text}]} onPress={() => setShowNotesModal(null)}>
-                        <Text style={[styles.modalCloseText, {color: colors.background}]}>Save & Close</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                          <TouchableOpacity onPress={() => handleDeleteSeparateNote(n.id)}>
+                            <Ionicons name="trash-outline" size={18} color={colors.error} />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </ScrollView>
+
+                    <TextInput
+                      style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
+                      placeholder="Add a separate note for this chapter..."
+                      placeholderTextColor="#888"
+                      value={newSeparateNote}
+                      onChangeText={setNewSeparateNote}
+                    />
+
+                    <TouchableOpacity
+                      style={[styles.primaryButton, {backgroundColor: colors.accent, marginBottom: 10}]}
+                      onPress={() => handleAddSeparateNote(showNotesModal.id)}
+                    >
+                      <Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Add Note Entry</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.text}]} onPress={() => setShowNotesModal(null)}>
+                      <Text style={[styles.modalCloseText, {color: colors.background}]}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             )}
@@ -664,24 +644,20 @@ export default function CourseDetailScreen({ route }) {
                 ))}
               </View>
 
-              <View style={styles.typeRow}>
-                {['dont_understand', 'not_fully', 'understand'].map(level => (
-                  <TouchableOpacity key={level} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, topicUnderstanding === level && {backgroundColor: colors.text}]} onPress={() => setTopicUnderstanding(level)}>
-                    <Text style={[styles.typeBtnText, {color: colors.text}, topicUnderstanding === level && {color: colors.background}]}>
-                      {level === 'dont_understand' ? '❓' : level === 'not_fully' ? '📚' : '✅'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={[styles.notesSection, {borderColor: colors.border}]}>
+                <View style={styles.notesSectionHeader}>
+                  <Ionicons name="create-outline" size={18} color={colors.accent} />
+                  <Text style={[styles.notesSectionTitle, {color: colors.text}]}>Study Notes</Text>
+                </View>
+                <TextInput
+                  style={[styles.notesInput, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
+                  multiline
+                  placeholder="📝 Add key points, formulas, or summaries..."
+                  placeholderTextColor="#888"
+                  value={topicRevisionNotes}
+                  onChangeText={setTopicRevisionNotes}
+                />
               </View>
-
-              <TextInput
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
-                multiline
-                placeholder="Revision notes for exam..."
-                placeholderTextColor="#666"
-                value={topicRevisionNotes}
-                onChangeText={setTopicRevisionNotes}
-              />
 
               <TouchableOpacity style={[styles.secondaryButton, {borderColor: colors.accent}]} onPress={handlePickImage}>
                 <Text style={[styles.secondaryButtonText, {color: colors.accent}]}>
@@ -715,9 +691,6 @@ export default function CourseDetailScreen({ route }) {
             <View style={styles.sectionHeader}>
               <FontAwesome5 name="layer-group" size={18} color={colors.accent} />
               <Text style={[styles.cardLabel, {color: colors.accent}]}>Assessment Breakdown</Text>
-              <TouchableOpacity onPress={handleShowHistory} style={{ marginLeft: 'auto' }}>
-                <Ionicons name="time-outline" size={20} color={colors.subText} />
-              </TouchableOpacity>
             </View>
 
             {/* Mid Exam */}
@@ -725,50 +698,39 @@ export default function CourseDetailScreen({ route }) {
             {exams.find(e => e.exam_type === 'Mid')?.obtained_marks !== null ? (
               <View style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                    <Text style={[styles.gradeName, {color: colors.text}]}>Mid Exam ({exams.find(e => e.exam_type === 'Mid')?.weight || 0}%)</Text>
-                    {exams.find(e => e.exam_type === 'Mid')?.is_rounded && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                  </View>
-                  {exams.find(e => e.exam_type === 'Mid')?.is_rounded ? (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      <Text style={styles.originalMarkText}>Raw: {exams.find(e => e.exam_type === 'Mid')?.obtained_marks}/{exams.find(e => e.exam_type === 'Mid')?.total_marks}</Text>
-                      <Text> → </Text>
-                      <Text style={[styles.roundedMarkText, {color: colors.accent}]}>Rounded: {exams.find(e => e.exam_type === 'Mid')?.rounded_score}/{exams.find(e => e.exam_type === 'Mid')?.rounded_total}</Text>
-                    </Text>
-                  ) : (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      Score: {exams.find(e => e.exam_type === 'Mid')?.obtained_marks}/{exams.find(e => e.exam_type === 'Mid')?.total_marks}
-                    </Text>
-                  )}
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>
+                    Score: {exams.find(e => e.exam_type === 'Mid')?.obtained_marks}/{exams.find(e => e.exam_type === 'Mid')?.total_marks}
+                  </Text>
                 </View>
-                <View style={{flexDirection: 'row', gap: 8}}>
-                  <TouchableOpacity onPress={() => setShowExamWeightModal('Mid')}>
-                    <Ionicons name="options-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setShowRoundingModal('exam_Mid')}>
-                    <Ionicons name="create-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => handleClearExamGrades('Mid')}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={[styles.examGradeForm, {borderBottomColor: colors.border}]}>
                 <View style={styles.inputRow}>
-                  <TextInput 
-                    style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                    placeholder="Score" 
-                    placeholderTextColor="#666"
-                    value={midObtained}
-                    onChangeText={setMidObtained}
-                    keyboardType="numeric"
-                  />
-                  <TextInput 
-                    style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                    placeholder="Total" 
-                    placeholderTextColor="#666"
-                    value={midTotal}
-                    onChangeText={setMidTotal}
-                    keyboardType="numeric"
-                  />
+                  <View style={{flex: 1}}>
+                    <Text style={[styles.inputLabel, {color: colors.text}]}>Score</Text>
+                    <TextInput 
+                      style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
+                      placeholder="0" 
+                      placeholderTextColor="#666"
+                      value={midObtained}
+                      onChangeText={setMidObtained}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={[styles.inputLabel, {color: colors.text}]}>Total</Text>
+                    <TextInput 
+                      style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
+                      placeholder="0" 
+                      placeholderTextColor="#666"
+                      value={midTotal}
+                      onChangeText={setMidTotal}
+                      keyboardType="numeric"
+                    />
+                  </View>
                 </View>
                 <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleSaveMidGrades}>
                   <Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Mid Grade</Text>
@@ -781,47 +743,39 @@ export default function CourseDetailScreen({ route }) {
             {exams.find(e => e.exam_type === 'Final')?.obtained_marks !== null ? (
               <View style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                    <Text style={[styles.gradeName, {color: colors.text}]}>Final Exam ({exams.find(e => e.exam_type === 'Final')?.weight || 0}%)</Text>
-                    {exams.find(e => e.exam_type === 'Final')?.is_rounded && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                  </View>
-                  {exams.find(e => e.exam_type === 'Final')?.is_rounded ? (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      <Text style={styles.originalMarkText}>Raw: {exams.find(e => e.exam_type === 'Final')?.obtained_marks}/{exams.find(e => e.exam_type === 'Final')?.total_marks}</Text>
-                      <Text> → </Text>
-                      <Text style={[styles.roundedMarkText, {color: colors.accent}]}>Rounded: {exams.find(e => e.exam_type === 'Final')?.rounded_score}/{exams.find(e => e.exam_type === 'Final')?.rounded_total}</Text>
-                    </Text>
-                  ) : (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      Score: {exams.find(e => e.exam_type === 'Final')?.obtained_marks}/{exams.find(e => e.exam_type === 'Final')?.total_marks}
-                    </Text>
-                  )}
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>
+                    Score: {exams.find(e => e.exam_type === 'Final')?.obtained_marks}/{exams.find(e => e.exam_type === 'Final')?.total_marks}
+                  </Text>
                 </View>
-                <View style={{flexDirection: 'row', gap: 8}}>
-                  <TouchableOpacity onPress={() => setShowRoundingModal('exam_Final')}>
-                    <Ionicons name="create-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => handleClearExamGrades('Final')}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={[styles.examGradeForm, {borderBottomColor: colors.border}]}>
                 <View style={styles.inputRow}>
-                  <TextInput 
-                    style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                    placeholder="Score" 
-                    placeholderTextColor="#666"
-                    value={finalObtained}
-                    onChangeText={setFinalObtained}
-                    keyboardType="numeric"
-                  />
-                  <TextInput 
-                    style={[styles.inputField, {flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                    placeholder="Total" 
-                    placeholderTextColor="#666"
-                    value={finalTotal}
-                    onChangeText={setFinalTotal}
-                    keyboardType="numeric"
-                  />
+                  <View style={{flex: 1}}>
+                    <Text style={[styles.inputLabel, {color: colors.text}]}>Score</Text>
+                    <TextInput 
+                      style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
+                      placeholder="0" 
+                      placeholderTextColor="#666"
+                      value={finalObtained}
+                      onChangeText={setFinalObtained}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={[styles.inputLabel, {color: colors.text}]}>Total</Text>
+                    <TextInput 
+                      style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
+                      placeholder="0" 
+                      placeholderTextColor="#666"
+                      value={finalTotal}
+                      onChangeText={setFinalTotal}
+                      keyboardType="numeric"
+                    />
+                  </View>
                 </View>
                 <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleSaveFinalGrades}>
                   <Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Final Grade</Text>
@@ -833,27 +787,12 @@ export default function CourseDetailScreen({ route }) {
             {theoryAssessments.map(a => (
               <View key={a.id} style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                    <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
-                    {a.is_rounded && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                  </View>
-                  {a.is_rounded ? (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      <Text style={styles.originalMarkText}>Raw: {a.obtained_marks}/{a.total_marks}</Text>
-                      <Text> → </Text>
-                      <Text style={[styles.roundedMarkText, {color: colors.accent}]}>Rounded: {a.rounded_score}/{a.rounded_total}</Text>
-                    </Text>
-                  ) : (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      Final: {a.obtained_marks}/{a.total_marks}
-                      {a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}
-                    </Text>
-                  )}
+                  <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>
+                    Score: {a.obtained_marks}/{a.total_marks}
+                  </Text>
                 </View>
                 <View style={{flexDirection: 'row', gap: 8}}>
-                  <TouchableOpacity onPress={() => setShowRoundingModal(a.id)}>
-                    <Ionicons name="create-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}>
                     <Ionicons name="trash-outline" size={18} color={colors.error} />
                   </TouchableOpacity>
@@ -865,77 +804,18 @@ export default function CourseDetailScreen({ route }) {
             {labAssessments.map(a => (
               <View key={a.id} style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
                 <View style={{ flex: 1 }}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                    <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
-                    {a.is_rounded && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                  </View>
-                  {a.is_rounded ? (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      <Text style={styles.originalMarkText}>Raw: {a.obtained_marks}/{a.total_marks}</Text>
-                      <Text> → </Text>
-                      <Text style={[styles.roundedMarkText, {color: colors.accent}]}>Rounded: {a.rounded_score}/{a.rounded_total}</Text>
-                    </Text>
-                  ) : (
-                    <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                      Final: {a.obtained_marks}/{a.total_marks}
-                      {a.original_marks !== a.obtained_marks && <Text style={styles.originalMarkText}> (Raw: {a.original_marks})</Text>}
-                    </Text>
-                  )}
+                  <Text style={[styles.gradeName, {color: colors.text}]}>{a.name} ({a.weight}%)</Text>
+                  <Text style={[styles.gradeSub, {color: colors.subText}]}>
+                    Score: {a.obtained_marks}/{a.total_marks}
+                  </Text>
                 </View>
                 <View style={{flexDirection: 'row', gap: 8}}>
-                  <TouchableOpacity onPress={() => setShowRoundingModal(a.id)}>
-                    <Ionicons name="create-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => { deleteAssessment(a.id); loadData(); }}>
                     <Ionicons name="trash-outline" size={18} color={colors.error} />
                   </TouchableOpacity>
                 </View>
               </View>
             ))}
-
-            {/* End of Course Grouping */}
-            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
-              <Text style={[styles.formTitle, {color: colors.text}]}>End of Course Processing</Text>
-              <Text style={[styles.formSubtitle, {color: colors.subText}]}>Group assessments for teacher rounding</Text>
-              
-              {/* Assessment Groups */}
-              {assessmentGroups.length > 0 && <Text style={[styles.subCategoryTitle, {color: colors.accent, borderBottomColor: colors.border}]}>Assessment Groups</Text>}
-              {assessmentGroups.map(group => {
-                const groupItems = getAssessmentGroupItems(group.id);
-                return (
-                  <View key={group.id} style={[styles.gradeRow, {borderBottomColor: colors.border}]}>
-                    <View style={{ flex: 1 }}>
-                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                        <Text style={[styles.gradeName, {color: colors.text}]}>{group.group_name} ({group.weight || 0}%)</Text>
-                        {group.rounded_score !== null && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                      </View>
-                      <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                        {groupItems.map(item => item.name).join(', ')}
-                      </Text>
-                      {group.rounded_score !== null ? (
-                        <Text style={[styles.gradeSub, {color: colors.subText}]}>
-                          <Text style={styles.originalMarkText}>Raw: {groupItems.reduce((s, i) => s + (i.obtained_marks || 0), 0)}/{groupItems.reduce((s, i) => s + (i.total_marks || 0), 0)}</Text>
-                          <Text> → </Text>
-                          <Text style={[styles.roundedMarkText, {color: colors.accent}]}>Rounded: {group.rounded_score}/{group.rounded_total}</Text>
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={{flexDirection: 'row', gap: 8}}>
-                      <TouchableOpacity onPress={() => setShowRoundingModal(`group_${group.id}`)}>
-                        <Ionicons name="create-outline" size={18} color={colors.accent} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteGroup(group.id)}>
-                        <Ionicons name="trash-outline" size={18} color={colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-              
-              <TouchableOpacity style={[styles.secondaryButton, {borderColor: colors.accent}]} onPress={() => setShowGroupingModal(true)}>
-                <Text style={[styles.secondaryButtonText, {color: colors.accent}]}>+ Create Assessment Group</Text>
-              </TouchableOpacity>
-            </View>
 
             <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
               <Text style={[styles.formTitle, {color: colors.text}]}>Add New Record</Text>
@@ -952,157 +832,6 @@ export default function CourseDetailScreen({ route }) {
                 <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total" placeholderTextColor="#666" value={assessTotal} onChangeText={setAssessTotal} keyboardType="numeric" />
               </View>
               <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddAssessment}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Grade</Text></TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Rounding Modal */}
-        {showRoundingModal && (
-          <View style={[styles.modalOverlay, {backgroundColor: 'rgba(0,0,0,0.5)'}]}>
-            <View style={[styles.modalContent, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <Text style={[styles.modalTitle, {color: colors.text}]}>
-                {typeof showRoundingModal === 'string' && showRoundingModal.startsWith('group_') ? 'Group Rounding' : 
-                 typeof showRoundingModal === 'string' && showRoundingModal.startsWith('exam_') ? 'Exam Rounding' : 'Assessment Rounding'}
-              </Text>
-              <TextInput 
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                placeholder="Rounded Score" 
-                placeholderTextColor="#666"
-                value={roundedScore}
-                onChangeText={setRoundedScore}
-                keyboardType="numeric"
-              />
-              <TextInput 
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                placeholder="Rounded Total" 
-                placeholderTextColor="#666"
-                value={roundedTotal}
-                onChangeText={setRoundedTotal}
-                keyboardType="numeric"
-              />
-              <TextInput 
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                placeholder="Reason (optional)" 
-                placeholderTextColor="#666"
-                value={roundingReason}
-                onChangeText={setRoundingReason}
-              />
-              <View style={styles.modalButtonRow}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, {backgroundColor: colors.text}]} 
-                  onPress={() => {
-                    if (typeof showRoundingModal === 'string' && showRoundingModal.startsWith('group_')) {
-                      const groupId = parseInt(showRoundingModal.split('_')[1]);
-                      handleSetGroupRounding(groupId, parseFloat(roundedScore), parseFloat(roundedTotal), roundingReason);
-                    } else if (typeof showRoundingModal === 'string' && showRoundingModal.startsWith('exam_')) {
-                      const examType = showRoundingModal.split('_')[1];
-                      handleSetExamRounding(examType);
-                    } else {
-                      handleSetRounding();
-                    }
-                  }}
-                >
-                  <Text style={[styles.modalButtonText, {color: colors.background}]}>Apply Rounding</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, {backgroundColor: colors.card, borderColor: colors.border}]} 
-                  onPress={() => {
-                    setShowRoundingModal(null);
-                    setRoundedScore('');
-                    setRoundedTotal('');
-                    setRoundingReason('');
-                  }}
-                >
-                  <Text style={[styles.modalButtonText, {color: colors.text}]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Grouping Modal */}
-        {showGroupingModal && (
-          <View style={[styles.modalOverlay, {backgroundColor: 'rgba(0,0,0,0.5)'}]}>
-            <View style={[styles.modalContent, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <Text style={[styles.modalTitle, {color: colors.text}]}>Create Assessment Group</Text>
-              <TextInput 
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                placeholder="Group Name (e.g., Quizzes)" 
-                placeholderTextColor="#666"
-                value={groupName}
-                onChangeText={setGroupName}
-              />
-              <TextInput 
-                style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
-                placeholder="Weight % (e.g., 20)" 
-                placeholderTextColor="#666"
-                value={groupWeight}
-                onChangeText={setGroupWeight}
-                keyboardType="numeric"
-              />
-              <Text style={[styles.formTitle, {color: colors.text}]}>Select Assessments:</Text>
-              <ScrollView style={styles.assessmentList}>
-                {assessments.map(a => (
-                  <TouchableOpacity 
-                    key={a.id} 
-                    style={[styles.assessmentItem, {backgroundColor: colors.secondary, borderColor: colors.border}, selectedAssessments.includes(a.id) && {backgroundColor: colors.accent}]}
-                    onPress={() => handleToggleAssessmentSelection(a.id)}
-                  >
-                    <Text style={[styles.assessmentItemText, {color: selectedAssessments.includes(a.id) ? colors.buttonText : colors.text}]}>{a.name}</Text>
-                    {selectedAssessments.includes(a.id) && <Ionicons name="checkmark" size={16} color={colors.buttonText} />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <View style={styles.modalButtonRow}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, {backgroundColor: colors.text}]} 
-                  onPress={handleCreateGroup}
-                >
-                  <Text style={[styles.modalButtonText, {color: colors.background}]}>Create Group</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, {backgroundColor: colors.card, borderColor: colors.border}]} 
-                  onPress={() => {
-                    setShowGroupingModal(false);
-                    setGroupName('');
-                    setGroupWeight('');
-                    setSelectedAssessments([]);
-                  }}
-                >
-                  <Text style={[styles.modalButtonText, {color: colors.text}]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* History Modal */}
-        {showHistoryModal && (
-          <View style={[styles.modalOverlay, {backgroundColor: 'rgba(0,0,0,0.5)'}]}>
-            <View style={[styles.modalContent, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <Text style={[styles.modalTitle, {color: colors.text}]}>Rounding History</Text>
-              <ScrollView style={styles.historyList}>
-                {roundingHistory.length === 0 ? (
-                  <Text style={[styles.emptyText, {color: colors.subText}]}>No rounding history</Text>
-                ) : (
-                  roundingHistory.map(h => (
-                    <View key={h.id} style={[styles.historyItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                      <Text style={[styles.historyItemName, {color: colors.text}]}>{h.item_name} ({h.item_type})</Text>
-                      <Text style={[styles.historyItemDetail, {color: colors.subText}]}>
-                        {h.raw_score}/{h.raw_total} → {h.rounded_score}/{h.rounded_total}
-                      </Text>
-                      {h.reason && <Text style={[styles.historyItemReason, {color: colors.subText}]}>Reason: {h.reason}</Text>}
-                      <Text style={[styles.historyItemDate, {color: colors.subText}]}>{new Date(h.created_at).toLocaleDateString()}</Text>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
-              <TouchableOpacity 
-                style={[styles.modalButton, {backgroundColor: colors.text}]} 
-                onPress={() => setShowHistoryModal(false)}
-              >
-                <Text style={[styles.modalButtonText, {color: colors.background}]}>Close</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1155,63 +884,117 @@ export default function CourseDetailScreen({ route }) {
         )}
 
         {activeTab === 'Schedule' && (
-          <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="calendar" size={22} color={colors.accent} />
-              <Text style={[styles.cardLabel, {color: colors.accent}]}>Weekly Plan</Text>
+          <View>
+            <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="calendar" size={22} color={colors.accent} />
+                <Text style={[styles.cardLabel, {color: colors.accent}]}>Weekly Plan</Text>
+              </View>
+
+              {scheduleEntries.map((s) => (
+                <View key={s.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                  <View style={[styles.typeBadge, { backgroundColor: s.class_type === 'Lab' ? colors.warning : colors.accent, borderColor: colors.border }]}><Text style={[styles.typeBadgeText, {color: colors.buttonText}]}>{s.class_type}</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.timeText, {color: colors.text}]}>{s.day_of_week} · {s.start_time} - {s.end_time}</Text>
+                    <Text style={[styles.roomText, {color: colors.subText}]}>{s.room || 'TBA'}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => { deleteScheduleEntry(s.id); loadData(); }}><Ionicons name="close-circle" size={20} color={colors.error} /></TouchableOpacity>
+                </View>
+              ))}
+
+              <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+                <Text style={[styles.formTitle, {color: colors.text}]}>Add Class Time</Text>
+                <View style={styles.typeRow}>
+                  {TYPES.map(t => (
+                    <TouchableOpacity key={t} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, selectedType === t && {backgroundColor: colors.text}]} onPress={() => setSelectedType(t)}>
+                      <Text style={[styles.typeBtnText, {color: colors.text}, selectedType === t && {color: colors.background}]}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.dayRow}>
+                  {DAYS.map(d => (
+                    <TouchableOpacity key={d} style={[styles.dayChip, {backgroundColor: colors.card, borderColor: colors.border}, selectedDay === d && {backgroundColor: colors.accent, borderColor: colors.accent}]} onPress={() => setSelectedDay(d)}>
+                      <Text style={[styles.dayChipText, {color: colors.text}, selectedDay === d && {color: colors.buttonText}]}>{d.slice(0,3)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.inputRow}>
+                  <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowStartPicker(true)}>
+                    <Text style={[styles.inputText, {color: colors.text}]}>Start: {startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowEndPicker(true)}>
+                    <Text style={[styles.inputText, {color: colors.text}]}>End: {endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showStartPicker && (
+                  <DateTimePicker
+                    value={startTime} mode="time" display="default"
+                    onChange={(event, date) => { setShowStartPicker(false); if(date) setStartTime(date); }}
+                  />
+                )}
+                {showEndPicker && (
+                  <DateTimePicker
+                    value={endTime} mode="time" display="default"
+                    onChange={(event, date) => { setShowEndPicker(false); if(date) setEndTime(date); }}
+                  />
+                )}
+
+                <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Room / Location" placeholderTextColor="#666" value={room} onChangeText={setRoom} />
+                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddSchedule}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Schedule</Text></TouchableOpacity>
+              </View>
             </View>
 
-            {scheduleEntries.map((s) => (
-              <View key={s.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                <View style={[styles.typeBadge, { backgroundColor: s.class_type === 'Lab' ? colors.warning : colors.accent, borderColor: colors.border }]}><Text style={[styles.typeBadgeText, {color: colors.buttonText}]}>{s.class_type}</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.timeText, {color: colors.text}]}>{s.day_of_week} · {s.start_time} - {s.end_time}</Text>
-                  <Text style={[styles.roomText, {color: colors.subText}]}>{s.room || 'TBA'}</Text>
+            {/* NEW ASSIGNMENTS / HOMEWORK SECTION */}
+            <View style={[styles.card, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="clipboard-outline" size={22} color={colors.accent} />
+                <Text style={[styles.cardLabel, {color: colors.accent}]}>Assignments & Homework</Text>
+              </View>
+
+              {courseTasks.map((t) => (
+                <View key={t.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                  <TouchableOpacity onPress={() => handleToggleTaskStatus(t)}>
+                    <Ionicons name={t.status === 'done' ? "checkbox" : "square-outline"} size={22} color={t.status === 'done' ? colors.success : colors.accent} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[styles.timeText, {color: colors.text, textDecorationLine: t.status === 'done' ? 'line-through' : 'none'}]}>{t.name}</Text>
+                    <Text style={[styles.roomText, {color: colors.subText}]}>Due: {t.deadline}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeleteTask(t.id)}><Ionicons name="trash-outline" size={18} color={colors.error} /></TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => { deleteScheduleEntry(s.id); loadData(); }}><Ionicons name="close-circle" size={20} color={colors.error} /></TouchableOpacity>
-              </View>
-            ))}
+              ))}
 
-            <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
-              <Text style={[styles.formTitle, {color: colors.text}]}>Add Class Time</Text>
-              <View style={styles.typeRow}>
-                {TYPES.map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, selectedType === t && {backgroundColor: colors.text}]} onPress={() => setSelectedType(t)}>
-                    <Text style={[styles.typeBtnText, {color: colors.text}, selectedType === t && {color: colors.background}]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.dayRow}>
-                {DAYS.map(d => (
-                  <TouchableOpacity key={d} style={[styles.dayChip, {backgroundColor: colors.card, borderColor: colors.border}, selectedDay === d && {backgroundColor: colors.accent, borderColor: colors.accent}]} onPress={() => setSelectedDay(d)}>
-                    <Text style={[styles.dayChipText, {color: colors.text}, selectedDay === d && {color: colors.buttonText}]}>{d.slice(0,3)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.inputRow}>
-                <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowStartPicker(true)}>
-                  <Text style={[styles.inputText, {color: colors.text}]}>Start: {startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border }]} onPress={() => setShowEndPicker(true)}>
-                  <Text style={[styles.inputText, {color: colors.text}]}>End: {endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {showStartPicker && (
-                <DateTimePicker
-                  value={startTime} mode="time" display="default"
-                  onChange={(event, date) => { setShowStartPicker(false); if(date) setStartTime(date); }}
+              <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
+                <Text style={[styles.formTitle, {color: colors.text}]}>New Assignment</Text>
+                <TextInput
+                  style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
+                  placeholder="Task description..."
+                  placeholderTextColor="#666"
+                  value={taskName}
+                  onChangeText={setTaskName}
                 />
-              )}
-              {showEndPicker && (
-                <DateTimePicker
-                  value={endTime} mode="time" display="default"
-                  onChange={(event, date) => { setShowEndPicker(false); if(date) setEndTime(date); }}
-                />
-              )}
 
-              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Room / Location" placeholderTextColor="#666" value={room} onChangeText={setRoom} />
-              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddSchedule}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Schedule</Text></TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border}]}
+                  onPress={() => setShowTaskDeadlinePicker(true)}
+                >
+                  <Text style={[styles.inputText, {color: colors.text}]}>
+                    Due Date: {taskDeadlineDate.toISOString().split('T')[0]}
+                  </Text>
+                </TouchableOpacity>
+
+                {showTaskDatePicker && (
+                  <DateTimePicker
+                    value={taskDeadlineDate} mode="date" display="default"
+                    onChange={(event, date) => { setShowTaskDeadlinePicker(false); if(date) setTaskDeadlineDate(date); }}
+                  />
+                )}
+
+                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleAddTaskForCourse}>
+                  <Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Set Assignment</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
@@ -1235,42 +1018,42 @@ const createStyles = (colors) => StyleSheet.create({
   headerArea: { marginBottom: 20 },
   header: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
   subheader: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', marginTop: 4 },
-  card: { borderRadius: 15, padding: 18, marginBottom: 20, borderWidth: 2 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
-  cardLabel: { fontSize: 15, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  goalLabel: { fontSize: 10, textTransform: 'uppercase', fontWeight: '900' },
-  goalValue: { fontSize: 36, fontWeight: '900' },
+  card: { borderRadius: 15, padding: 12, marginBottom: 15, borderWidth: 2 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+  cardLabel: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  goalLabel: { fontSize: 9, textTransform: 'uppercase', fontWeight: '900' },
+  goalValue: { fontSize: 28, fontWeight: '900' },
   targetBox: { alignItems: 'flex-end' },
-  targetInput: { fontSize: 24, fontWeight: '900', borderBottomWidth: 3, textAlign: 'right', width: 60 },
-  progressContainer: { height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 12, borderWidth: 1.5 },
+  targetInput: { fontSize: 20, fontWeight: '900', borderBottomWidth: 3, textAlign: 'right', width: 50 },
+  progressContainer: { height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 10, borderWidth: 1.5 },
   progressContainerMain: { flex: 1 },
   progressFill: { height: '100%' },
-  remainingText: { fontSize: 12, marginTop: 6, fontWeight: '800' },
-  attendanceSummary: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 15 },
-  statBox: { alignItems: 'center', padding: 12, borderRadius: 12, minWidth: 85, borderWidth: 2 },
-  statValue: { fontSize: 20, fontWeight: '900' },
-  statLabel: { fontSize: 9, textTransform: 'uppercase', fontWeight: '900' },
-  historySection: { marginTop: 10, marginBottom: 15 },
-  historyTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
-  historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
-  historyDate: { fontSize: 14, fontWeight: '700' },
-  historyReason: { fontSize: 12 },
-  divider: { height: 2, marginVertical: 15, borderStyle: 'dashed' },
-  secondaryButton: { padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, marginTop: 10 },
-  secondaryButtonText: { fontWeight: '900', fontSize: 13, textTransform: 'uppercase' },
-  miniLabel: { fontSize: 10, marginBottom: 4, textTransform: 'uppercase', fontWeight: '900' },
-  subCategoryTitle: { fontSize: 15, fontWeight: '900', marginTop: 15, marginBottom: 8, textTransform: 'uppercase', borderBottomWidth: 2 },
+  remainingText: { fontSize: 11, marginTop: 4, fontWeight: '800' },
+  attendanceSummary: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  statBox: { alignItems: 'center', padding: 10, borderRadius: 12, minWidth: 75, borderWidth: 2 },
+  statValue: { fontSize: 18, fontWeight: '900' },
+  statLabel: { fontSize: 8, textTransform: 'uppercase', fontWeight: '900' },
+  historySection: { marginTop: 8, marginBottom: 12 },
+  historyTitle: { fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
+  historyDate: { fontSize: 13, fontWeight: '700' },
+  historyReason: { fontSize: 11 },
+  divider: { height: 2, marginVertical: 12, borderStyle: 'dashed' },
+  secondaryButton: { padding: 10, borderRadius: 12, alignItems: 'center', borderWidth: 2, marginTop: 8 },
+  secondaryButtonText: { fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
+  miniLabel: { fontSize: 9, marginBottom: 2, textTransform: 'uppercase', fontWeight: '900' },
+  subCategoryTitle: { fontSize: 13, fontWeight: '900', marginTop: 12, marginBottom: 6, textTransform: 'uppercase', borderBottomWidth: 2 },
   originalMarkText: { color: '#E63946', fontStyle: 'italic', fontWeight: '900' },
-  coachText: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
-  gradeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
-  gradeName: { fontSize: 16, fontWeight: '900' },
-  gradeSub: { fontSize: 13, fontWeight: '700' },
-  miniMasteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 5 },
-  masteryText: { fontSize: 13, fontWeight: '900' },
-  masteryBox: { alignItems: 'center', padding: 20, borderRadius: 15, marginBottom: 20, borderWidth: 2 },
-  topicRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
-  topicName: { fontSize: 15, fontWeight: '800' },
+  coachText: { fontSize: 12, fontWeight: '800', lineHeight: 18 },
+  gradeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  gradeName: { fontSize: 14, fontWeight: '900' },
+  gradeSub: { fontSize: 12, fontWeight: '700' },
+  miniMasteryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  masteryText: { fontSize: 12, fontWeight: '900' },
+  masteryBox: { alignItems: 'center', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 2 },
+  topicRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  topicName: { fontSize: 14, fontWeight: '800' },
   topicDone: { textDecorationLine: 'line-through', opacity: 0.5 },
   topicMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   understandingBadge: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
@@ -1285,6 +1068,13 @@ const createStyles = (colors) => StyleSheet.create({
   understandingOptionText: { fontSize: 14, fontWeight: '700' },
   modalCloseBtn: { padding: 12, borderRadius: 8, marginTop: 12, alignItems: 'center' },
   modalCloseText: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  notesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12, marginBottom: 12, borderBottomWidth: 2 },
+  notesHeaderText: { fontSize: 16, fontWeight: '900' },
+  notesFooter: { marginTop: 8, marginBottom: 12 },
+  notesHint: { fontSize: 12, fontStyle: 'italic' },
+  notesSection: { marginTop: 12, paddingTop: 12, borderWidth: 2, borderRadius: 12 },
+  notesSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  notesSectionTitle: { fontSize: 14, fontWeight: '900' },
   notesInput: { borderRadius: 12, padding: 12, borderWidth: 2, minHeight: 100, textAlignVertical: 'top', marginBottom: 12 },
   topicImage: { width: 200, height: 200, borderRadius: 12, resizeMode: 'contain', marginBottom: 12 },
   imageScroll: { maxHeight: 250, marginBottom: 12 },
@@ -1309,26 +1099,27 @@ const createStyles = (colors) => StyleSheet.create({
   historyItemDate: { fontSize: 10, marginTop: 4, opacity: 0.7 },
   formContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 2 },
   formSubtitle: { fontSize: 12, marginBottom: 12, fontStyle: 'italic' },
-  examGradeForm: { padding: 12, marginBottom: 12 },
-  inputField: { borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 2, fontWeight: '700' },
-  inputRow: { flexDirection: 'row', gap: 10 },
-  primaryButton: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 5 },
-  primaryButtonText: { fontWeight: '900', textTransform: 'uppercase' },
-  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, padding: 12, borderRadius: 12, borderWidth: 2 },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1 },
-  typeBadgeText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-  timeText: { fontSize: 14, fontWeight: '900' },
-  roomText: { fontSize: 12, fontWeight: '700' },
-  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  typeBtn: { flex: 1, padding: 10, borderRadius: 10, borderWidth: 2, alignItems: 'center' },
-  typeBtnText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  dayChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 2 },
-  dayChipText: { fontSize: 11, fontWeight: '900' },
-  examItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 10, borderWidth: 2 },
-  examTypeTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
-  examCountdown: { fontSize: 12, fontWeight: '900' },
-  datePickerBtn: { padding: 8, borderRadius: 8, borderWidth: 1.5 },
-  inputText: { fontWeight: '700' },
-  emptyText: { fontStyle: 'italic', fontWeight: '700' },
+  examGradeForm: { padding: 10, marginBottom: 10 },
+  inputLabel: { fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  inputField: { borderRadius: 12, padding: 8, marginBottom: 8, borderWidth: 2, fontWeight: '700', fontSize: 13 },
+  inputRow: { flexDirection: 'row', gap: 8 },
+  primaryButton: { padding: 10, borderRadius: 12, alignItems: 'center', marginTop: 4 },
+  primaryButtonText: { fontWeight: '900', textTransform: 'uppercase', fontSize: 12 },
+  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, padding: 10, borderRadius: 12, borderWidth: 2 },
+  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
+  typeBadgeText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+  timeText: { fontSize: 13, fontWeight: '900' },
+  roomText: { fontSize: 11, fontWeight: '700' },
+  typeRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
+  typeBtn: { flex: 1, padding: 8, borderRadius: 10, borderWidth: 2, alignItems: 'center' },
+  typeBtnText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 },
+  dayChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 2 },
+  dayChipText: { fontSize: 10, fontWeight: '900' },
+  examItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 12, marginBottom: 8, borderWidth: 2 },
+  examTypeTitle: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
+  examCountdown: { fontSize: 11, fontWeight: '900' },
+  datePickerBtn: { padding: 6, borderRadius: 8, borderWidth: 1.5 },
+  inputText: { fontWeight: '700', fontSize: 13 },
+  emptyText: { fontStyle: 'italic', fontWeight: '700', fontSize: 12 },
 });

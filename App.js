@@ -18,6 +18,8 @@ import UserSetupScreen from './screens/UserSetupScreen';
 import TasksScreen from './screens/TasksScreen';
 import PersonalScreen from './screens/PersonalScreen';
 import JournalScreen from './screens/JournalScreen';
+import ChapterNotesScreen from './screens/ChapterNotesScreen';
+import ChapterImagesScreen from './screens/ChapterImagesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -97,6 +99,8 @@ function AppNavigator() {
         <Stack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Assignments' }} />
         <Stack.Screen name="Personal" component={PersonalScreen} options={{ title: 'Daily Log' }} />
         <Stack.Screen name="Journal" component={JournalScreen} options={{ title: 'Journal' }} />
+        <Stack.Screen name="ChapterNotes" component={ChapterNotesScreen} options={{ title: 'Chapter Notes' }} />
+        <Stack.Screen name="ChapterImages" component={ChapterImagesScreen} options={{ title: 'Chapter Images' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

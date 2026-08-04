@@ -47,7 +47,22 @@ export function calculateOverallCGPA(previousCgpa, previousCredits, allSemesterC
   let prevCredits = previousCredits || 0;
   let prevQualityPoints = (previousCgpa || 0) * prevCredits;
 
-  const result = calculateSemesterGPA(allSemesterCourses);
+  // RETAKE LOGIC: Filter courses to keep only the newest attempt for each course code
+  const uniqueCourses = [];
+  const seenCodes = new Set();
+
+  // We assume allSemesterCourses are passed in order from newest to oldest
+  for (const course of allSemesterCourses) {
+    const code = course.courseCode ? course.courseCode.trim().toUpperCase() : null;
+
+    // If it has a code and we've seen it before, skip it (it's an older attempt)
+    if (code && seenCodes.has(code)) continue;
+
+    if (code) seenCodes.add(code);
+    uniqueCourses.push(course);
+  }
+
+  const result = calculateSemesterGPA(uniqueCourses);
 
   const totalCredits = prevCredits + result.totalCredits;
   const totalQualityPoints = prevQualityPoints + result.totalQualityPoints;
