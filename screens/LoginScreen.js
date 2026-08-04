@@ -17,6 +17,9 @@ export default function LoginScreen({ navigation }) {
   const showPreviousRecord = !isNaN(yearNum) && yearNum > 1;
 
   function handleContinue() {
+    console.log('handleContinue called');
+    console.log('Name:', name, 'Year:', year, 'YearNum:', yearNum);
+    
     if (!name.trim()) {
       Alert.alert('Missing Name', 'Please enter your name to personalize your experience.');
       return;
@@ -37,26 +40,29 @@ export default function LoginScreen({ navigation }) {
       }
     }
 
-    saveUserProfile({
-      name: name.trim(),
-      university: university.trim(),
-      studentId: studentId.trim(),
-      year: yearNum,
-      previousCgpa: cgpa,
-      previousCredits: credits,
-    });
-
-    navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
+    try {
+      console.log('Saving profile...');
+      saveUserProfile({
+        name: name.trim(),
+        university: university.trim(),
+        studentId: studentId.trim(),
+        year: yearNum,
+        previousCgpa: cgpa,
+        previousCredits: credits,
+      });
+      console.log('Profile saved, navigating to Dashboard');
+      navigation.navigate('Dashboard');
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    }
   }
 
   const styles = createStyles(colors);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.flex}
-    >
-      <ScrollView style={[styles.container, {backgroundColor: colors.background}]} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.headerSection}>
           <View style={[styles.logoCircle, {backgroundColor: colors.accent, borderColor: colors.border}]}>
             <Ionicons name="school" size={40} color={colors.buttonText} />
@@ -149,13 +155,17 @@ export default function LoginScreen({ navigation }) {
             </View>
           )}
 
-          <TouchableOpacity style={[styles.continueButton, {backgroundColor: colors.text}]} onPress={handleContinue}>
+          <TouchableOpacity 
+            style={[styles.continueButton, {backgroundColor: colors.text}]} 
+            onPress={handleContinue}
+            activeOpacity={0.7}
+          >
             <Text style={[styles.continueButtonText, {color: colors.background}]}>Get Started</Text>
             <Ionicons name="arrow-forward" size={20} color={colors.background} style={{ marginLeft: 8 }} />
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

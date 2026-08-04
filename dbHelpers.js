@@ -46,6 +46,13 @@ export function updateCourseGrade(courseId, grade) {
   db.runSync(`UPDATE courses SET grade = ? WHERE id = ?;`, [grade, courseId]);
 }
 
+export function updateCourseDetails(courseId, name, courseCode, creditHours) {
+  db.runSync(
+    `UPDATE courses SET name = ?, course_code = ?, credit_hours = ? WHERE id = ?;`,
+    [name, courseCode, creditHours, courseId]
+  );
+}
+
 // ---------- SEMESTER GPA ----------
 
 export function updateSemesterGPA(semesterId, gpa, totalCredits) {
@@ -176,12 +183,10 @@ export function getScheduleConflict(dayOfWeek, startTime, endTime, excludeSchedu
   return null;
 }
 
-// Returns today's classes across all courses, sorted by start time,
-// each with the course name attached, plus today's exception status if any
-export function getTodaysClasses() {
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const today = dayNames[new Date().getDay()];
+// Returns classes for a specific day sorted by start time
+export function getClassesByDay(dayName) {
   const todayDate = new Date().toISOString().split('T')[0];
+  // Calculate specific date if needed, but for schedule we just need the day name
 
   const classes = db.getAllSync(`
     SELECT schedule.id, schedule.start_time, schedule.end_time, schedule.room, schedule.class_type,
@@ -190,12 +195,48 @@ export function getTodaysClasses() {
     JOIN courses ON schedule.course_id = courses.id
     WHERE schedule.day_of_week = ?
     ORDER BY schedule.start_time ASC;
-  `, [today]);
+  `, [dayName]);
 
   return classes.map((c) => {
     const exception = db.getFirstSync(
       `SELECT status, note FROM schedule_exceptions WHERE schedule_id = ? AND date = ?;`,
-      [c.id, todayDate]
+      [c.id, todayDate] // Note: Exceptions are usually date-specific
+    );
+    return { ...c, exceptionStatus: exception?.status ?? null, exceptionNote: exception?.note ?? null };
+  });
+}
+
+// Returns today's classes across all courses, sorted by start time
+export function getTodaysClasses() {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const today = dayNames[new Date().getDay()];
+  return getClassesByDay(today);
+}
+
+// Returns tomorrow's classes
+export function getTomorrowsClasses() {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const tomorrowIndex = (new Date().getDay() + 1) % 7;
+  const tomorrow = dayNames[tomorrowIndex];
+
+  // For tomorrow, we don't necessarily check "today's" exceptions unless we pass a date
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowDateStr = tomorrowDate.toISOString().split('T')[0];
+
+  const classes = db.getAllSync(`
+    SELECT schedule.id, schedule.start_time, schedule.end_time, schedule.room, schedule.class_type,
+           courses.name as course_name
+    FROM schedule
+    JOIN courses ON schedule.course_id = courses.id
+    WHERE schedule.day_of_week = ?
+    ORDER BY schedule.start_time ASC;
+  `, [tomorrow]);
+
+  return classes.map((c) => {
+    const exception = db.getFirstSync(
+      `SELECT status, note FROM schedule_exceptions WHERE schedule_id = ? AND date = ?;`,
+      [c.id, tomorrowDateStr]
     );
     return { ...c, exceptionStatus: exception?.status ?? null, exceptionNote: exception?.note ?? null };
   });
@@ -241,6 +282,10 @@ export function getAllTasks() {
 
 export function getPendingTasks() {
   return db.getAllSync(`SELECT * FROM tasks WHERE status = 'pending' ORDER BY deadline ASC;`);
+}
+
+export function getTasksByCourse(courseId) {
+  return db.getAllSync(`SELECT * FROM tasks WHERE course_id = ? ORDER BY deadline ASC;`, [courseId]);
 }
 
 export function updateTaskStatus(id, status) {
@@ -345,12 +390,20 @@ export function getUpcomingDeadlines() {
     WHERE assessments.deadline IS NOT NULL AND assessments.obtained_marks IS NULL;
   `);
 
-  // 3. Combine, filter out past items, and sort
-  const all = [...relevantExams, ...assessments]
+  // 3. Get pending tasks (Assignments/Homework) from tasks table
+  const tasks = db.getAllSync(`
+    SELECT tasks.deadline as date, tasks.name as type, courses.name as course_name
+    FROM tasks
+    JOIN courses ON tasks.course_id = courses.id
+    WHERE tasks.status = 'pending' AND tasks.deadline IS NOT NULL;
+  `);
+
+  // 4. Combine, filter out past items, and sort
+  const all = [...relevantExams, ...assessments, ...tasks]
     .filter(item => new Date(item.date) >= now)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  return all.slice(0, 4); // return top 4 soonest items
+  return all.slice(0, 5); // return top 5 soonest items
 }
 
 export function getAssessments(courseId) {
@@ -519,6 +572,22 @@ export function clearExamRounding(courseId, examType) {
   }
 }
 
+// Returns all upcoming exams across all courses
+export function getAllUpcomingExams() {
+  const rows = db.getAllSync(`
+    SELECT exams.exam_date, exams.exam_type, courses.name as course_name
+    FROM exams
+    JOIN courses ON exams.course_id = courses.id
+    WHERE exams.exam_date IS NOT NULL
+    ORDER BY exams.exam_date ASC;
+  `);
+
+  const now = new Date();
+  now.setHours(0,0,0,0);
+
+  return rows.filter((r) => new Date(r.exam_date) >= now);
+}
+
 // Returns the single nearest upcoming exam (Mid or Final) across all courses
 export function getNearestUpcomingExam() {
   const rows = db.getAllSync(`
@@ -610,6 +679,28 @@ export function getTopicImages(topicId) {
 
 export function deleteTopicImage(imageId) {
   db.runSync(`DELETE FROM topic_images WHERE id = ?;`, [imageId]);
+}
+
+// ---------- TOPIC NOTES ----------
+
+export function addTopicNote(topicId, noteText) {
+  const result = db.runSync(
+    `INSERT INTO topic_notes (topic_id, note_text) VALUES (?, ?);`,
+    [topicId, noteText]
+  );
+  return result.lastInsertRowId;
+}
+
+export function getTopicNotes(topicId) {
+  return db.getAllSync(`SELECT * FROM topic_notes WHERE topic_id = ? ORDER BY created_at DESC;`, [topicId]);
+}
+
+export function deleteTopicNote(noteId) {
+  db.runSync(`DELETE FROM topic_notes WHERE id = ?;`, [noteId]);
+}
+
+export function updateTopicNote(noteId, noteText) {
+  db.runSync(`UPDATE topic_notes SET note_text = ? WHERE id = ?;`, [noteText, noteId]);
 }
 
 // ---------- ASSESSMENT ROUNDING ----------
