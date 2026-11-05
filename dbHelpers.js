@@ -17,6 +17,11 @@ export function deleteSemester(id) {
   db.runSync(`DELETE FROM semesters WHERE id = ?;`, [id]);
 }
 
+export function updateSemester(id, name, yearNumber) {
+  const y = parseInt(yearNumber, 10) || 1;
+  db.runSync(`UPDATE semesters SET name = ?, year_number = ? WHERE id = ?;`, [name, y, id]);
+}
+
 // ---------- COURSES ----------
 
 export function addCourse(semesterId, name, courseCode, creditHours) {
@@ -39,6 +44,20 @@ export function getCourseById(id) {
 }
 
 export function deleteCourse(id) {
+  db.runSync(`DELETE FROM absence_dates WHERE attendance_id IN (SELECT id FROM attendance WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM attendance WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM assessment_group_items WHERE group_id IN (SELECT id FROM assessment_groups WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM assessment_groups WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM assessments WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM exams WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM topic_images WHERE topic_id IN (SELECT id FROM revision_topics WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM topic_notes WHERE topic_id IN (SELECT id FROM revision_topics WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM revision_topics WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM schedule_exceptions WHERE schedule_id IN (SELECT id FROM schedule WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM schedule WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM tasks WHERE course_id = ?;`, [id]);
+  db.runSync(`DELETE FROM note_images WHERE note_id IN (SELECT id FROM notes WHERE course_id = ?);`, [id]);
+  db.runSync(`DELETE FROM notes WHERE course_id = ?;`, [id]);
   db.runSync(`DELETE FROM courses WHERE id = ?;`, [id]);
 }
 
@@ -51,6 +70,18 @@ export function updateCourseDetails(courseId, name, courseCode, creditHours) {
     `UPDATE courses SET name = ?, course_code = ?, credit_hours = ? WHERE id = ?;`,
     [name, courseCode, creditHours, courseId]
   );
+}
+
+// Finishing a course always saves its grade in the same step, so a course can never
+// end up "finished" without a grade (which would hide it from the rest of the app).
+export function finishCourse(courseId, grade) {
+  if (!grade || !String(grade).trim()) throw new Error('A grade is required to finish a course.');
+  db.runSync(`UPDATE courses SET grade = ?, is_finished = 1 WHERE id = ?;`, [String(grade).trim(), courseId]);
+}
+
+export function toggleCourseFinished(courseId, isFinished) {
+  const val = isFinished ? 1 : 0;
+  db.runSync(`UPDATE courses SET is_finished = ? WHERE id = ?;`, [val, courseId]);
 }
 
 // ---------- SEMESTER GPA ----------
@@ -122,7 +153,8 @@ export function getAllAttendanceSummaries() {
     SELECT attendance.id as attendance_id, attendance.total_classes, attendance.allowed_absence,
            courses.id as course_id, courses.name as course_name
     FROM attendance
-    JOIN courses ON attendance.course_id = courses.id;
+    JOIN courses ON attendance.course_id = courses.id
+    WHERE courses.is_finished = 0 OR courses.is_finished IS NULL;
   `);
 
   return rows.map((row) => {
@@ -160,6 +192,13 @@ export function getScheduleByCourse(courseId) {
   return db.getAllSync(`SELECT * FROM schedule WHERE course_id = ? ORDER BY day_of_week, start_time;`, [courseId]);
 }
 
+export function updateScheduleEntry(id, dayOfWeek, startTime, endTime, room, classType) {
+  db.runSync(
+    `UPDATE schedule SET day_of_week = ?, start_time = ?, end_time = ?, room = ?, class_type = ? WHERE id = ?;`,
+    [dayOfWeek, startTime, endTime, room || null, classType || 'Lecture', id]
+  );
+}
+
 export function deleteScheduleEntry(id) {
   db.runSync(`DELETE FROM schedule WHERE id = ?;`, [id]);
 }
@@ -171,7 +210,7 @@ export function getScheduleConflict(dayOfWeek, startTime, endTime, excludeSchedu
     SELECT schedule.id, schedule.start_time, schedule.end_time, courses.name as course_name
     FROM schedule
     JOIN courses ON schedule.course_id = courses.id
-    WHERE schedule.day_of_week = ?;
+    WHERE schedule.day_of_week = ? AND (courses.is_finished = 0 OR courses.is_finished IS NULL);
   `, [dayOfWeek]);
 
   for (const entry of existing) {
@@ -193,7 +232,7 @@ export function getClassesByDay(dayName) {
            courses.name as course_name
     FROM schedule
     JOIN courses ON schedule.course_id = courses.id
-    WHERE schedule.day_of_week = ?
+    WHERE schedule.day_of_week = ? AND (courses.is_finished = 0 OR courses.is_finished IS NULL)
     ORDER BY schedule.start_time ASC;
   `, [dayName]);
 
@@ -229,7 +268,7 @@ export function getTomorrowsClasses() {
            courses.name as course_name
     FROM schedule
     JOIN courses ON schedule.course_id = courses.id
-    WHERE schedule.day_of_week = ?
+    WHERE schedule.day_of_week = ? AND (courses.is_finished = 0 OR courses.is_finished IS NULL)
     ORDER BY schedule.start_time ASC;
   `, [tomorrow]);
 
@@ -281,7 +320,26 @@ export function getAllTasks() {
 }
 
 export function getPendingTasks() {
-  return db.getAllSync(`SELECT * FROM tasks WHERE status = 'pending' ORDER BY deadline ASC;`);
+  return db.getAllSync(`
+    SELECT tasks.* FROM tasks
+    LEFT JOIN courses ON tasks.course_id = courses.id
+    WHERE tasks.status = 'pending'
+      AND (tasks.course_id IS NULL OR (courses.id IS NOT NULL AND (courses.is_finished = 0 OR courses.is_finished IS NULL)))
+    ORDER BY tasks.deadline ASC;
+  `);
+}
+
+export function getUnfinishedCoursesCount() {
+  const row = db.getFirstSync(
+    `SELECT COUNT(*) as count FROM courses WHERE is_finished = 0 OR is_finished IS NULL;`
+  );
+  return row ? row.count : 0;
+}
+
+export function getTotalPendingCount() {
+  const tasksCount = getPendingTasks().length;
+  const coursesCount = getUnfinishedCoursesCount();
+  return tasksCount + coursesCount;
 }
 
 export function getTasksByCourse(courseId) {
@@ -356,8 +414,8 @@ export function getUpcomingDeadlines() {
   const now = new Date();
   now.setHours(0,0,0,0);
 
-  // 1. Get all courses to evaluate exams sequentially
-  const courses = db.getAllSync(`SELECT id, name FROM courses;`);
+  // 1. Get active courses to evaluate exams sequentially
+  const courses = db.getAllSync(`SELECT id, name FROM courses WHERE is_finished = 0 OR is_finished IS NULL;`);
   const relevantExams = [];
 
   courses.forEach(course => {
@@ -382,20 +440,22 @@ export function getUpcomingDeadlines() {
     }
   });
 
-  // 2. Get pending assessments with deadlines
+  // 2. Get pending assessments with deadlines for active courses
   const assessments = db.getAllSync(`
     SELECT assessments.deadline as date, assessments.name as type, courses.name as course_name
     FROM assessments
     JOIN courses ON assessments.course_id = courses.id
-    WHERE assessments.deadline IS NOT NULL AND assessments.obtained_marks IS NULL;
+    WHERE assessments.deadline IS NOT NULL AND assessments.obtained_marks IS NULL
+      AND (courses.is_finished = 0 OR courses.is_finished IS NULL);
   `);
 
-  // 3. Get pending tasks (Assignments/Homework) from tasks table
+  // 3. Get pending tasks (Assignments/Homework) from tasks table for active courses
   const tasks = db.getAllSync(`
     SELECT tasks.deadline as date, tasks.name as type, courses.name as course_name
     FROM tasks
     JOIN courses ON tasks.course_id = courses.id
-    WHERE tasks.status = 'pending' AND tasks.deadline IS NOT NULL;
+    WHERE tasks.status = 'pending' AND tasks.deadline IS NOT NULL
+      AND (courses.is_finished = 0 OR courses.is_finished IS NULL);
   `);
 
   // 4. Combine, filter out past items, and sort

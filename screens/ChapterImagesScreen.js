@@ -54,7 +54,7 @@ export default function ChapterImagesScreen({ route, navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.headerArea}>
         <Text style={[styles.header, { color: colors.text }]}>{topicName}</Text>
-        <Text style={[styles.subheader, { color: colors.subText }]}>Image Archive</Text>
+        <Text style={[styles.subheader, { color: colors.subText }]}>Photos</Text>
       </View>
 
       <FlatList
@@ -85,7 +85,7 @@ export default function ChapterImagesScreen({ route, navigation }) {
       />
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.accent, borderColor: colors.border }]}
+        style={[styles.fab, { backgroundColor: colors.bt, borderColor: colors.border }]}
         onPress={handleAddImage}
       >
         <Ionicons name="add" size={36} color={colors.buttonText} />
@@ -109,18 +109,18 @@ export default function ChapterImagesScreen({ route, navigation }) {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   headerArea: { padding: 20, paddingBottom: 0 },
-  header: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
-  subheader: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', marginTop: 4 },
+  header: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
+  subheader: { fontSize: 13, fontWeight: '800', marginTop: 4 },
   imageCard: {
     width: COLUMN_WIDTH,
-    borderRadius: 15,
-    borderWidth: 2,
+    borderRadius: 20,
+    borderWidth: 1.5,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 0
+    shadowColor: '#6C5CE7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4
   },
   thumbnail: { width: '100%', height: COLUMN_WIDTH },
   deleteBtn: {
@@ -136,14 +136,15 @@ const createStyles = (colors) => StyleSheet.create({
     right: 20,
     width: 64,
     height: 64,
-    borderRadius: 8,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    borderWidth: 0,
+    shadowColor: '#6C5CE7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4
   },
   viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeViewer: { position: 'absolute', top: 50, right: 20, zIndex: 10 },

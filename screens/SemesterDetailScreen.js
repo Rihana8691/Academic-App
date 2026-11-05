@@ -1,92 +1,81 @@
 import { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getCoursesBySemester } from '../dbHelpers';
+import { calculateSemesterGPA } from '../gpaCalculator';
 import { useTheme } from '../ThemeContext';
-
-const { height } = Dimensions.get('window');
-const ROW_HEIGHT = 60;
-const GHOST_LINES_COUNT = Math.ceil(height / ROW_HEIGHT);
+import { Hero, Card, PillButton, PASTELS } from '../ui';
 
 export default function SemesterDetailScreen({ route, navigation }) {
-  const { colors, theme } = useTheme();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { semesterId, semesterName } = route.params;
   const [courses, setCourses] = useState([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setCourses(getCoursesBySemester(semesterId));
-    }, [semesterId])
-  );
+  useFocusEffect(useCallback(() => { setCourses(getCoursesBySemester(semesterId)); }, [semesterId]));
 
-  // Helper to render the background ledger lines
-  const RenderGhostLines = () => (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {[...Array(GHOST_LINES_COUNT)].map((_, i) => (
-        <View
-          key={i}
-          style={[styles.ghostRow, { borderBottomColor: colors.border + (theme === 'dark' ? '15' : '30'), height: ROW_HEIGHT }]}
-        />
-      ))}
-      <View style={[styles.spineLine, { backgroundColor: colors.accent + (theme === 'dark' ? '30' : '50') }]} />
+  const totalCredits = courses.reduce((s, c) => s + (c.credit_hours || 0), 0);
+  const graded = courses.filter(c => c.grade);
+  let gpa = 0;
+  if (graded.length > 0) {
+    gpa = Number(calculateSemesterGPA(graded.map(c => ({ creditHours: c.credit_hours, grade: c.grade }))).gpa) || 0;
+  }
+
+  const header = (
+    <View>
+      <Hero>
+        <Text style={styles.kicker}>Semester</Text>
+        <Text style={styles.title}>{semesterName}</Text>
+        <View style={styles.chips}>
+          <View style={styles.chip}><Ionicons name="trophy" size={14} color="#fff" /><Text style={styles.chipText}>GPA {gpa.toFixed(2)}</Text></View>
+          <View style={styles.chip}><Ionicons name="ribbon" size={14} color="#fff" /><Text style={styles.chipText}>{totalCredits} credits</Text></View>
+          <View style={styles.chip}><Ionicons name="book" size={14} color="#fff" /><Text style={styles.chipText}>{courses.length} courses</Text></View>
+        </View>
+      </Hero>
+      <Text style={[styles.listTitle, { color: colors.text }]}>Courses</Text>
     </View>
   );
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <RenderGhostLines />
-
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={courses}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        ListHeaderComponent={
-          <View style={styles.headerSection}>
-            <Text style={[styles.header, {color: colors.text}]}>{semesterName.toUpperCase()}</Text>
-            <View style={[styles.headerDivider, {backgroundColor: colors.accent}]} />
-            <Text style={[styles.subheader, {color: colors.subText}]}>Official Course Record · {courses.length} Entries</Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.ledgerRow, { height: ROW_HEIGHT, borderBottomColor: colors.border }]}
+        keyExtractor={(i) => i.id.toString()}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ paddingBottom: 84 + insets.bottom }}
+        ListEmptyComponent={<Text style={{ color: colors.subText, textAlign: 'center', marginTop: 13, fontWeight: '600' }}>No courses yet. Add your first one 👇</Text>}
+        renderItem={({ item, index }) => (
+          <Card
+            style={styles.card}
             onPress={() => navigation.navigate('CourseDetail', { courseId: item.id, courseName: item.name })}
           >
-            <View style={[styles.idCol, {borderRightColor: colors.border + '40'}]}>
-              <Text style={[styles.idText, {color: colors.subText}]}>{item.course_code || '---'}</Text>
+            <View style={[styles.avatar, { backgroundColor: PASTELS[index % PASTELS.length] }]}>
+              <Text style={styles.avatarText}>{(item.course_code || item.name).slice(0, 2).toUpperCase()}</Text>
             </View>
-
-            <View style={styles.nameCol}>
-              <Text style={[styles.courseNameText, {color: colors.text}]} numberOfLines={1}>{item.name}</Text>
-              <Text style={[styles.creditsTextMini, {color: colors.subText}]}>{item.credit_hours} UNITS</Text>
-            </View>
-
-            <View style={[styles.gradeCol, {backgroundColor: item.grade ? colors.text : 'transparent'}]}>
-              <Text style={[styles.gradeText, {color: item.grade ? colors.background : colors.subText}]}>
-                {item.grade || '-'}
+            <View style={{ flex: 1, marginHorizontal: 9 }}>
+              <Text style={[styles.courseName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+              <Text style={{ color: colors.subText, fontSize: 12, fontWeight: '600', marginTop: 3 }}>
+                {item.course_code || 'No code'} · {item.credit_hours} credits
               </Text>
             </View>
-          </TouchableOpacity>
+            {item.is_finished === 1 ? (
+              <View style={[styles.badge, { backgroundColor: colors.success + '22' }]}>
+                <Text style={{ color: colors.success, fontWeight: '800', fontSize: 12 }}>{item.grade || 'Done'}</Text>
+              </View>
+            ) : (
+              <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+                <Text style={{ color: colors.subText, fontWeight: '700', fontSize: 12 }}>{item.grade || 'Active'}</Text>
+              </View>
+            )}
+          </Card>
         )}
       />
-
-      <View style={[styles.footerBar, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-        <TouchableOpacity
-          style={[styles.footerTabMain, {backgroundColor: colors.text}]}
-          onPress={() => navigation.navigate('AddCourse', { semesterId })}
-        >
-          <Ionicons name="add" size={20} color={colors.background} />
-          <Text style={[styles.footerTabTextMain, {color: colors.background}]}>Add Entry</Text>
-        </TouchableOpacity>
-
+      <View style={[styles.footer, { bottom: 24 + insets.bottom }]}>
+        <PillButton label="Add course" icon="add" style={{ flex: 1 }} onPress={() => navigation.navigate('AddCourse', { semesterId })} />
         {courses.length > 0 && (
-          <TouchableOpacity
-            style={[styles.footerTabSide, {borderLeftColor: colors.border}]}
-            onPress={() => navigation.navigate('FinalGrades', { semesterId, semesterName })}
-          >
-            <Text style={[styles.footerTabTextSide, {color: colors.text}]}>Audit File</Text>
-          </TouchableOpacity>
+          <PillButton label="Grades" icon="school" soft style={{ flex: 1, backgroundColor: colors.card }} onPress={() => navigation.navigate('FinalGrades', { semesterId, semesterName })} />
         )}
       </View>
     </View>
@@ -94,81 +83,16 @@ export default function SemesterDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-
-  // TYPOGRAPHY
-  headerSection: { padding: 30, paddingTop: 30, marginBottom: 0 },
-  header: { fontSize: 20, fontWeight: '300', letterSpacing: 4 },
-  headerDivider: { height: 1, width: 30, marginTop: 10, marginBottom: 10 },
-  subheader: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2 },
-
-  // LEDGER GRID
-  ghostRow: { width: '100%' },
-  spineLine: { position: 'absolute', left: 90, top: 0, bottom: 0, width: 1 },
-
-  ledgerRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    borderBottomWidth: 0.5,
-    alignItems: 'center',
-  },
-  idCol: {
-    width: 70,
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRightWidth: 1,
-    paddingRight: 10
-  },
-  idText: { fontSize: 11, fontWeight: '300', letterSpacing: 1 },
-  nameCol: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  courseNameText: { fontSize: 15, fontWeight: '400', letterSpacing: -0.2 },
-  creditsTextMini: { fontSize: 8, fontWeight: '800', marginTop: 2, opacity: 0.6 },
-
-  gradeCol: {
-    width: 40,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: 'transparent'
-  },
-  gradeText: { fontSize: 13, fontWeight: '900' },
-
-  // FOOTER BAR
-  footerBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    flexDirection: 'row',
-    borderTopWidth: 2,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 15
-  },
-  footerTabMain: {
-    flex: 2,
-    height: 45,
-    borderRadius: 4,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8
-  },
-  footerTabTextMain: { fontWeight: '800', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  footerTabSide: {
-    flex: 1,
-    height: 45,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderLeftWidth: 1,
-  },
-  footerTabTextSide: { fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
+  kicker: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' },
+  title: { color: '#fff', fontSize: 27, fontWeight: '800', marginTop: 2, marginBottom: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 649 },
+  chipText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  listTitle: { fontSize: 17, fontWeight: '800', marginHorizontal: 13, marginTop: 14, marginBottom: 8 },
+  card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 13, marginBottom: 8, padding: 9 },
+  avatar: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#1E1B4B', fontWeight: '800', fontSize: 14 },
+  courseName: { fontSize: 15, fontWeight: '700' },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 649 },
+  footer: { position: 'absolute', bottom: 24, left: 20, right: 20, flexDirection: 'row', gap: 8 },
 });

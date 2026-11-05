@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TextInput, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { saveUserProfile } from '../dbHelpers';
 import { useTheme } from '../ThemeContext';
+import { Hero, Card, PillButton, inputStyle } from '../ui';
 
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
@@ -17,175 +18,72 @@ export default function LoginScreen({ navigation }) {
   const showPreviousRecord = !isNaN(yearNum) && yearNum > 1;
 
   function handleContinue() {
-    console.log('handleContinue called');
-    console.log('Name:', name, 'Year:', year, 'YearNum:', yearNum);
-    
-    if (!name.trim()) {
-      Alert.alert('Missing Name', 'Please enter your name to personalize your experience.');
-      return;
-    }
-    if (!year.trim() || isNaN(yearNum) || yearNum < 1) {
-      Alert.alert('Invalid Year', 'Please enter a valid academic year (e.g., 1, 2, 3...).');
-      return;
-    }
-
-    let cgpa = 0;
-    let credits = 0;
+    if (!name.trim()) { Alert.alert('Missing name', 'Please enter your name.'); return; }
+    if (!year.trim() || isNaN(yearNum) || yearNum < 1) { Alert.alert('Invalid year', 'Please enter a valid academic year (1, 2, 3...).'); return; }
+    let cgpa = 0, credits = 0;
     if (showPreviousRecord) {
       cgpa = parseFloat(previousCgpa) || 0;
       credits = parseInt(previousCredits, 10) || 0;
-      if (previousCgpa && (isNaN(cgpa) || cgpa < 0 || cgpa > 4)) {
-        Alert.alert('Invalid CGPA', 'CGPA must be between 0.0 and 4.0.');
-        return;
-      }
+      if (previousCgpa && (isNaN(cgpa) || cgpa < 0 || cgpa > 4)) { Alert.alert('Invalid CGPA', 'CGPA must be between 0.0 and 4.0.'); return; }
     }
-
     try {
-      console.log('Saving profile...');
-      saveUserProfile({
-        name: name.trim(),
-        university: university.trim(),
-        studentId: studentId.trim(),
-        year: yearNum,
-        previousCgpa: cgpa,
-        previousCredits: credits,
-      });
-      console.log('Profile saved, navigating to Dashboard');
+      saveUserProfile({ name: name.trim(), university: university.trim(), studentId: studentId.trim(), year: yearNum, previousCgpa: cgpa, previousCredits: credits });
       navigation.navigate('Dashboard');
-    } catch (error) {
-      console.error('Error saving profile:', error);
+    } catch (e) {
       Alert.alert('Error', 'Failed to save profile. Please try again.');
     }
   }
 
-  const styles = createStyles(colors);
+  const Label = ({ t }) => <Text style={[styles.label, { color: colors.subText }]}>{t}</Text>;
+  const inp = inputStyle(colors);
+  const ph = colors.subText;
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerSection}>
-          <View style={[styles.logoCircle, {backgroundColor: colors.accent, borderColor: colors.border}]}>
-            <Ionicons name="school" size={40} color={colors.buttonText} />
-          </View>
-          <Text style={[styles.header, {color: colors.text}]}>Welcome to StudentApp</Text>
-          <Text style={[styles.subheader, {color: colors.subText}]}>Let's get your academic profile ready.</Text>
-        </View>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <Hero top style={{ alignItems: 'center', paddingBottom: 52 }}>
+        <View style={styles.logo}><Ionicons name="school" size={36} color={colors.accent} /></View>
+        <Text style={styles.title}>Welcome! 👋</Text>
+        <Text style={styles.sub}>Let's set up your student profile</Text>
+      </Hero>
 
-        <View style={[styles.formCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <Text style={[styles.label, {color: colors.text}]}>Full Name</Text>
-          <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-            <Ionicons name="person-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-            <TextInput style={[styles.input, {color: colors.text}]} placeholder="Enter your name" placeholderTextColor="#666" value={name} onChangeText={setName} />
-          </View>
-
-          <Text style={[styles.label, {color: colors.text}]}>University</Text>
-          <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-            <Ionicons name="business-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-            <TextInput
-              style={[styles.input, {color: colors.text}]}
-              placeholder="e.g., Harvard University"
-              placeholderTextColor="#666"
-              value={university}
-              onChangeText={setUniversity}
-            />
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <Text style={[styles.label, {color: colors.text}]}>Student ID</Text>
-              <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                <Ionicons name="card-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, {color: colors.text}]}
-                  placeholder="ID Number"
-                  placeholderTextColor="#666"
-                  value={studentId}
-                  onChangeText={setStudentId}
-                />
-              </View>
+      <View style={{ paddingHorizontal: 13, marginTop: -32 }}>
+        <Card>
+          <Label t="Full name" />
+          <TextInput style={inp} placeholder="Your name" placeholderTextColor={ph} value={name} onChangeText={setName} />
+          <Label t="University" />
+          <TextInput style={inp} placeholder="e.g. Harvard University" placeholderTextColor={ph} value={university} onChangeText={setUniversity} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Label t="Student ID" />
+              <TextInput style={inp} placeholder="ID number" placeholderTextColor={ph} value={studentId} onChangeText={setStudentId} />
             </View>
-            <View style={[styles.flex, { marginLeft: 15 }]}>
-              <Text style={[styles.label, {color: colors.text}]}>Year</Text>
-              <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                <Ionicons name="time-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, {color: colors.text}]}
-                  placeholder="e.g. 3"
-                  placeholderTextColor="#666"
-                  value={year}
-                  onChangeText={setYear}
-                  keyboardType="numeric"
-                />
-              </View>
+            <View style={{ flex: 1 }}>
+              <Label t="Year" />
+              <TextInput style={inp} placeholder="e.g. 3" placeholderTextColor={ph} value={year} onChangeText={setYear} keyboardType="numeric" />
             </View>
           </View>
 
           {showPreviousRecord && (
-            <View style={[styles.recordSection, {borderTopColor: colors.border}]}>
-              <View style={[styles.infoBanner, {backgroundColor: colors.card, borderColor: colors.border}]}>
-                <Ionicons name="information-circle" size={20} color={colors.accent} />
-                <Text style={[styles.infoText, {color: colors.text}]}>Enter your past record for accurate CGPA.</Text>
-              </View>
-
-              <Text style={[styles.label, {color: colors.text}]}>Previous CGPA</Text>
-              <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                <MaterialCommunityIcons name="calculator-variant-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, {color: colors.text}]}
-                  placeholder="e.g. 3.75"
-                  placeholderTextColor="#666"
-                  value={previousCgpa}
-                  onChangeText={setPreviousCgpa}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <Text style={[styles.label, {color: colors.text}]}>Total Credits Completed</Text>
-              <View style={[styles.inputWrapper, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
-                <Ionicons name="checkmark-done-circle-outline" size={20} color={colors.accent} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, {color: colors.text}]}
-                  placeholder="e.g. 120"
-                  placeholderTextColor="#666"
-                  value={previousCredits}
-                  onChangeText={setPreviousCredits}
-                  keyboardType="numeric"
-                />
-              </View>
+            <View style={[styles.record, { backgroundColor: colors.secondary }]}>
+              <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>📈 Your past record</Text>
+              <Text style={{ color: colors.subText, fontSize: 12, fontWeight: '600' }}>Helps us calculate an accurate CGPA.</Text>
+              <Label t="Previous CGPA" />
+              <TextInput style={[inp, { backgroundColor: colors.card }]} placeholder="e.g. 3.75" placeholderTextColor={ph} value={previousCgpa} onChangeText={setPreviousCgpa} keyboardType="decimal-pad" />
+              <Label t="Credits completed" />
+              <TextInput style={[inp, { backgroundColor: colors.card }]} placeholder="e.g. 120" placeholderTextColor={ph} value={previousCredits} onChangeText={setPreviousCredits} keyboardType="numeric" />
             </View>
           )}
-
-          <TouchableOpacity 
-            style={[styles.continueButton, {backgroundColor: colors.text}]} 
-            onPress={handleContinue}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.continueButtonText, {color: colors.background}]}>Get Started</Text>
-            <Ionicons name="arrow-forward" size={20} color={colors.background} style={{ marginLeft: 8 }} />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
+        </Card>
+        <PillButton label="Get started" icon="arrow-forward" onPress={handleContinue} style={{ marginTop: 16 }} />
+      </View>
+    </ScrollView>
   );
 }
 
-const createStyles = (colors) => StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1 },
-  scrollContent: { padding: 24, paddingBottom: 60 },
-  headerSection: { alignItems: 'center', marginTop: 40, marginBottom: 32 },
-  logoCircle: { width: 80, height: 80, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 3 },
-  header: { fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1 },
-  subheader: { fontSize: 15, textAlign: 'center', marginTop: 8, fontWeight: '700' },
-  formCard: { borderRadius: 20, padding: 20, borderWidth: 2, shadowColor: '#000', shadowOffset: {width: 6, height: 6}, shadowOpacity: 1, shadowRadius: 0, elevation: 0 },
-  label: { fontSize: 12, fontWeight: '900', marginBottom: 8, marginTop: 16, textTransform: 'uppercase', letterSpacing: 1 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 2 },
-  inputIcon: { marginLeft: 12 },
-  input: { flex: 1, padding: 12, fontSize: 16, fontWeight: '700' },
-  row: { flexDirection: 'row' },
-  recordSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 2, borderStyle: 'dashed' },
-  infoBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 15, gap: 10, borderWidth: 1.5 },
-  infoText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '700' },
-  continueButton: { borderRadius: 16, padding: 20, alignItems: 'center', justifyContent: 'center', marginTop: 32, flexDirection: 'row' },
-  continueButtonText: { fontWeight: '900', fontSize: 18, textTransform: 'uppercase' },
+const styles = StyleSheet.create({
+  logo: { width: 67, height: 67, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  title: { color: '#fff', fontSize: 27, fontWeight: '800' },
+  sub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: 4 },
+  label: { fontSize: 12, fontWeight: '700', marginBottom: 5, marginTop: 9 },
+  record: { borderRadius: 13, padding: 10, marginTop: 12 },
 });

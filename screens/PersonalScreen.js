@@ -213,7 +213,7 @@ export default function PersonalScreen({ navigation }) {
               <View style={[styles.greetingBadge, {backgroundColor: colors.secondary}]}>
                 <Ionicons name="sunny-outline" size={20} color={colors.accent} />
               </View>
-              <Text style={[styles.header, {color: colors.text}]}>My Day</Text>
+              <Text style={[styles.header, {color: '#fff'}]}>My Day</Text>
             </View>
             <TouchableOpacity onPress={() => setShowWeekView(!showWeekView)} style={[styles.dateBadge, {backgroundColor: colors.card, borderColor: colors.border}]}>
               <View style={{marginRight: 6}}>
@@ -330,7 +330,7 @@ export default function PersonalScreen({ navigation }) {
               <TextInput
                 style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                 placeholder="New habit name..."
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.subText}
                 value={newHabitName}
                 onChangeText={setNewHabitName}
               />
@@ -377,8 +377,8 @@ export default function PersonalScreen({ navigation }) {
                   )}
                 </View>
               </View>
-              <TouchableOpacity style={[styles.saveBtn, {backgroundColor: colors.text}]} onPress={handleAddHabit}>
-                <Text style={[styles.saveBtnText, {color: colors.background}]}>Add Habit</Text>
+              <TouchableOpacity style={[styles.saveBtn, {backgroundColor: colors.accent}]} onPress={handleAddHabit}>
+                <Text style={[styles.saveBtnText, {color: colors.buttonText}]}>Add Habit</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -468,7 +468,7 @@ export default function PersonalScreen({ navigation }) {
         </Modal>
 
         <TouchableOpacity 
-          style={[styles.card, styles.shadow, styles.clickableCard, {backgroundColor: colors.card, borderColor: colors.border, borderWidth: 2}]}
+          style={[styles.card, styles.shadow, styles.clickableCard, {backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1.5}]}
           onPress={() => navigation.navigate('Journal')}
           activeOpacity={0.7}
         >
@@ -494,30 +494,30 @@ export default function PersonalScreen({ navigation }) {
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
-  headerRow: { marginBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  headerRow: { marginBottom: 20, backgroundColor: colors.accent, borderRadius: 22, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   headerContent: { flex: 1 },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   greetingBadge: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  header: { fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
-  dateBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, alignSelf: 'flex-start', borderWidth: 2, height: 40 },
-  subheader: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  progressCardRow: { borderRadius: 16, borderWidth: 2, padding: 12, marginBottom: 16, alignItems: 'center', justifyContent: 'space-between' },
+  header: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  dateBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, alignSelf: 'flex-start', borderWidth: 1.5, height: 40 },
+  subheader: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  progressCardRow: { borderRadius: 20, borderWidth: 0, padding: 14, marginBottom: 16, alignItems: 'center', justifyContent: 'space-between' },
   progressCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   progressLeft: { flex: 1 },
-  progressLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  progressPercentage: { fontSize: 20, fontWeight: '900', lineHeight: 20 },
+  progressLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
+  progressPercentage: { fontSize: 20, fontWeight: '800', lineHeight: 20 },
   progressCount: { fontSize: 13, fontWeight: '700' },
-  progressCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, justifyContent: 'center', alignItems: 'center', marginLeft: 16 },
+  progressCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 0, justifyContent: 'center', alignItems: 'center', marginLeft: 16 },
   journalPreview: { fontSize: 14, fontWeight: '600', marginTop: 4 },
-  clickableCard: { borderWidth: 2 },
-  iconContainer: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  clickableCard: { borderWidth: 1.5 },
+  iconContainer: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
   cardHeaderContent: { flex: 1 },
-  weekView: { borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 2 },
-  weekDay: { width: 52, padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 2, marginRight: 10, borderColor: 'transparent' },
+  weekView: { borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1.5 },
+  weekDay: { width: 52, padding: 12, borderRadius: 16, alignItems: 'center', borderWidth: 1.5, marginRight: 10, borderColor: 'transparent' },
   weekDaySelected: { borderWidth: 0 },
-  weekDayName: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 },
-  weekDayNumber: { fontSize: 18, fontWeight: '900' },
-  card: { borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 2 },
+  weekDayName: { fontSize: 11, fontWeight: '700', marginBottom: 4, letterSpacing: 0.5 },
+  weekDayNumber: { fontSize: 18, fontWeight: '800' },
+  card: { borderRadius: 20, padding: 14, marginBottom: 12, borderWidth: 0 },
   shadow: {
     shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
@@ -526,61 +526,61 @@ const createStyles = (colors) => StyleSheet.create({
     elevation: 8
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
-  cardTitle: { fontSize: 15, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardTitle: { fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
   prayerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  prayerBtn: { flex: 1, minWidth: '30%', padding: 14, borderRadius: 12, alignItems: 'center', position: 'relative', borderWidth: 2 },
-  prayerLabel: { fontSize: 10, fontWeight: '900', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  prayerBtn: { flex: 1, minWidth: '30%', padding: 14, borderRadius: 16, alignItems: 'center', position: 'relative', borderWidth: 1.5 },
+  prayerLabel: { fontSize: 10, fontWeight: '800', marginTop: 4, letterSpacing: 0.5 },
   check: { position: 'absolute', top: 4, right: 4 },
-  input: { borderRadius: 12, padding: 15, height: 100, textAlignVertical: 'top', fontSize: 15, borderWidth: 2, fontWeight: '700' },
-  saveBtn: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  saveBtnText: { fontWeight: '900', textTransform: 'uppercase' },
+  input: { borderRadius: 16, padding: 15, height: 100, textAlignVertical: 'top', fontSize: 15, borderWidth: 1.5, fontWeight: '700' },
+  saveBtn: { padding: 15, borderRadius: 16, alignItems: 'center', marginTop: 10 },
+  saveBtnText: { fontWeight: '800' },
   notesList: { marginTop: 20 },
   noteItem: { paddingVertical: 12, borderBottomWidth: 1.5, flexDirection: 'row', alignItems: 'center' },
   noteText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  noteDate: { fontSize: 11, marginTop: 4, fontWeight: '900' },
+  noteDate: { fontSize: 11, marginTop: 4, fontWeight: '800' },
   habitItemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1.5 },
-  habitIconBg: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 2 },
+  habitIconBg: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1.5 },
   habitInfo: { flex: 1 },
-  habitLabel: { fontSize: 15, fontWeight: '800' },
+  habitLabel: { fontSize: 15, fontWeight: '700' },
   habitMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap' },
-  habitCategory: { fontSize: 10, fontWeight: '800', marginRight: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF0E6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, marginRight: 8 },
-  streakText: { fontSize: 10, fontWeight: '900', color: '#FF6B35', marginLeft: 2 },
-  weekStats: { fontSize: 10, fontWeight: '800' },
-  checkbox: { width: 26, height: 26, borderRadius: 7, borderWidth: 3, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  habitCategory: { fontSize: 10, fontWeight: '700', marginRight: 8, letterSpacing: 0.5 },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF0E6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, marginRight: 8 },
+  streakText: { fontSize: 10, fontWeight: '800', color: '#FF6B35', marginLeft: 2 },
+  weekStats: { fontSize: 10, fontWeight: '700' },
+  checkbox: { width: 26, height: 26, borderRadius: 7, borderWidth: 0, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
   historyBtn: { padding: 4, marginRight: 4 },
   deleteHabitBtn: { padding: 4 },
   addHabitContainer: { marginBottom: 15 },
   habitOptions: { marginTop: 15 },
   optionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' },
   optionLabel: { fontSize: 13, fontWeight: '700', marginRight: 10, minWidth: 70 },
-  optionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1.5, marginRight: 8, marginBottom: 4 },
+  optionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1.5, marginRight: 8, marginBottom: 4 },
   optionText: { fontSize: 12, fontWeight: '700' },
-  timeBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
+  timeBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1.5 },
   timeText: { fontSize: 13, fontWeight: '700' },
   habitHeaderButtons: { flexDirection: 'row', gap: 8 },
   headerBtn: { padding: 4 },
   templatesContainer: { marginBottom: 15 },
   templatesTitle: { fontSize: 13, fontWeight: '700', marginBottom: 10 },
   templatesScroll: { marginBottom: 10 },
-  templateItem: { width: 100, padding: 12, borderRadius: 10, alignItems: 'center', marginRight: 10, borderWidth: 1.5 },
+  templateItem: { width: 100, padding: 12, borderRadius: 14, alignItems: 'center', marginRight: 10, borderWidth: 1.5 },
   templateName: { fontSize: 11, fontWeight: '700', marginTop: 6, textAlign: 'center' },
   emptyText: { fontSize: 15, color: '#999', fontStyle: 'italic', paddingVertical: 24, textAlign: 'center', fontWeight: '600' },
   emptyStateContainer: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 },
   emptyIcon: { marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '900', marginBottom: 8, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
   emptySubtitle: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { borderRadius: 20, padding: 20, width: '100%', maxWidth: 400, maxHeight: '80%', borderWidth: 2 },
+  modalContent: { borderRadius: 24, padding: 20, width: '100%', maxWidth: 400, maxHeight: '80%', borderWidth: 1.5 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '900' },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
   modalHabitInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1.5, borderBottomColor: '#ddd' },
-  modalHabitName: { fontSize: 18, fontWeight: '800' },
+  modalHabitName: { fontSize: 18, fontWeight: '700' },
   modalHabitStats: { fontSize: 13, fontWeight: '700', marginTop: 4 },
   historyList: { maxHeight: 300 },
   historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
   historyDate: { fontSize: 14, fontWeight: '600' },
-  historyStatus: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  historyStatus: { width: 32, height: 32, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   showMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, marginTop: 10 },
-  showMoreText: { fontSize: 14, fontWeight: '800', marginRight: 8 },
+  showMoreText: { fontSize: 14, fontWeight: '700', marginRight: 8 },
 });

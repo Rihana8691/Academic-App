@@ -66,7 +66,7 @@ export default function ChapterNotesScreen({ route, navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.headerArea}>
         <Text style={[styles.header, { color: colors.text }]}>{topicName}</Text>
-        <Text style={[styles.subheader, { color: colors.subText }]}>Chapter Ledger</Text>
+        <Text style={[styles.subheader, { color: colors.subText }]}>My Notes</Text>
       </View>
 
       <FlatList
@@ -100,7 +100,7 @@ export default function ChapterNotesScreen({ route, navigation }) {
       />
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.accent, borderColor: colors.border }]}
+        style={[styles.fab, { backgroundColor: colors.bt, borderColor: colors.border }]}
         onPress={() => handleOpenModal()}
       >
         <Ionicons name="add" size={36} color={colors.buttonText} />
@@ -123,7 +123,7 @@ export default function ChapterNotesScreen({ route, navigation }) {
                 style={[styles.noteInput, { backgroundColor: colors.secondary, color: colors.text, borderColor: colors.border }]}
                 multiline
                 placeholder="📝 Start writing your chapter notes here..."
-                placeholderTextColor="#888"
+                placeholderTextColor={colors.subText}
                 value={noteContent}
                 onChangeText={setNoteContent}
                 autoFocus
@@ -139,11 +139,11 @@ export default function ChapterNotesScreen({ route, navigation }) {
             {isEditingMode ? (
               <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.text }]} onPress={handleSaveNote}>
                 <Text style={[styles.saveBtnText, { color: colors.background }]}>
-                  {editingNote ? 'Update Ledger' : 'Stamp Entry'}
+                  {editingNote ? 'Save Changes' : 'Save Note'}
                 </Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent }]} onPress={() => setIsEditingMode(true)}>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.bt }]} onPress={() => setIsEditingMode(true)}>
                 <Text style={[styles.saveBtnText, { color: colors.buttonText }]}>
                   Edit Note
                 </Text>
@@ -159,23 +159,23 @@ export default function ChapterNotesScreen({ route, navigation }) {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   headerArea: { padding: 20, paddingBottom: 0 },
-  header: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
-  subheader: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', marginTop: 4 },
+  header: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
+  subheader: { fontSize: 13, fontWeight: '800', marginTop: 4 },
   noteCard: {
     padding: 16,
-    borderRadius: 15,
-    borderWidth: 2,
+    borderRadius: 20,
+    borderWidth: 1.5,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 0
+    shadowColor: '#6C5CE7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4
   },
-  notePreview: { fontSize: 15, fontWeight: '800', lineHeight: 22 },
-  noteDate: { fontSize: 11, fontWeight: '900', marginTop: 8, textTransform: 'uppercase' },
+  notePreview: { fontSize: 15, fontWeight: '700', lineHeight: 22 },
+  noteDate: { fontSize: 11, fontWeight: '800', marginTop: 8 },
   trashBtn: { marginLeft: 12, padding: 4 },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyText: { marginTop: 12, fontSize: 15, fontWeight: '700', textAlign: 'center', maxWidth: '80%' },
@@ -185,40 +185,41 @@ const createStyles = (colors) => StyleSheet.create({
     right: 20,
     width: 64,
     height: 64,
-    borderRadius: 8,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    borderWidth: 0,
+    shadowColor: '#6C5CE7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalContent: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    borderTopWidth: 4,
+    borderTopWidth: 1,
     height: '80%'
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '900', textTransform: 'uppercase' },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
   noteInput: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     fontSize: 16,
-    borderWidth: 2,
+    borderWidth: 1.5,
     textAlignVertical: 'top',
     fontWeight: '700',
     marginBottom: 20
   },
   readOnlyContainer: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 2,
+    borderWidth: 1.5,
     marginBottom: 20
   },
   readOnlyText: {
@@ -226,6 +227,6 @@ const createStyles = (colors) => StyleSheet.create({
     fontWeight: '700',
     lineHeight: 24
   },
-  saveBtn: { padding: 18, borderRadius: 12, alignItems: 'center' },
-  saveBtnText: { fontWeight: '900', fontSize: 16, textTransform: 'uppercase' }
+  saveBtn: { padding: 18, borderRadius: 16, alignItems: 'center' },
+  saveBtnText: { fontWeight: '800', fontSize: 16 }
 });

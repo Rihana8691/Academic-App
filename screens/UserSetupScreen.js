@@ -101,7 +101,7 @@ export default function UserSetupScreen({ navigation }) {
 
   return (
     <ScrollView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Text style={[styles.header, {color: colors.text}]}>Student File</Text>
+      <Text style={[styles.header, {color: colors.text}]}>Previous Record</Text>
       <Text style={[styles.subheader, {color: colors.subText}]}>
         Choose how to enter your previous academic record
       </Text>
@@ -111,7 +111,7 @@ export default function UserSetupScreen({ navigation }) {
           style={[styles.modeButton, !showDetailedEntry && styles.modeButtonActive, {borderColor: colors.border}]}
           onPress={() => setShowDetailedEntry(false)}
         >
-          <Text style={[styles.modeButtonText, !showDetailedEntry && {color: colors.buttonText}, {color: colors.text}]}>
+          <Text style={[styles.modeButtonText, {color: colors.text}, !showDetailedEntry && {color: colors.buttonText}]}>
             Summary
           </Text>
         </TouchableOpacity>
@@ -119,7 +119,7 @@ export default function UserSetupScreen({ navigation }) {
           style={[styles.modeButton, showDetailedEntry && styles.modeButtonActive, {borderColor: colors.border}]}
           onPress={() => setShowDetailedEntry(true)}
         >
-          <Text style={[styles.modeButtonText, showDetailedEntry && {color: colors.buttonText}, {color: colors.text}]}>
+          <Text style={[styles.modeButtonText, {color: colors.text}, showDetailedEntry && {color: colors.buttonText}]}>
             Detailed
           </Text>
         </TouchableOpacity>
@@ -131,7 +131,7 @@ export default function UserSetupScreen({ navigation }) {
           <TextInput
             style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
             placeholder="e.g. 3.34"
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.subText}
             value={previousCgpa}
             onChangeText={setPreviousCgpa}
             keyboardType="decimal-pad"
@@ -141,7 +141,7 @@ export default function UserSetupScreen({ navigation }) {
           <TextInput
             style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
             placeholder="e.g. 60"
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.subText}
             value={previousCredits}
             onChangeText={setPreviousCredits}
             keyboardType="numeric"
@@ -155,7 +155,7 @@ export default function UserSetupScreen({ navigation }) {
           <TextInput
             style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
             placeholder="e.g. Calculus I"
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.subText}
             value={newCourse.name}
             onChangeText={(text) => setNewCourse({...newCourse, name: text})}
           />
@@ -166,7 +166,7 @@ export default function UserSetupScreen({ navigation }) {
               <TextInput
                 style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                 placeholder="3"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.subText}
                 value={newCourse.credits}
                 onChangeText={(text) => setNewCourse({...newCourse, credits: text})}
                 keyboardType="numeric"
@@ -177,7 +177,7 @@ export default function UserSetupScreen({ navigation }) {
               <TextInput
                 style={[styles.input, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                 placeholder="A"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.subText}
                 value={newCourse.grade}
                 onChangeText={(text) => setNewCourse({...newCourse, grade: text})}
                 autoCapitalize="characters"
@@ -186,7 +186,7 @@ export default function UserSetupScreen({ navigation }) {
             </View>
           </View>
 
-          <TouchableOpacity style={[styles.addButton, {backgroundColor: colors.accent}]} onPress={addHistoricalCourse}>
+          <TouchableOpacity style={[styles.addButton, {backgroundColor: colors.bt}]} onPress={addHistoricalCourse}>
             <Text style={[styles.addButtonText, {color: colors.buttonText}]}>Add Course</Text>
           </TouchableOpacity>
 
@@ -213,8 +213,8 @@ export default function UserSetupScreen({ navigation }) {
         </View>
       )}
 
-      <TouchableOpacity style={[styles.saveButton, {backgroundColor: colors.text}]} onPress={handleSave}>
-        <Text style={[styles.saveButtonText, {color: colors.background}]}>Save Record</Text>
+      <TouchableOpacity style={[styles.saveButton, {backgroundColor: colors.bt}]} onPress={handleSave}>
+        <Text style={[styles.saveButtonText, {color: colors.buttonText}]}>Save Record</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -222,40 +222,40 @@ export default function UserSetupScreen({ navigation }) {
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  header: { fontSize: 26, fontWeight: '900', marginBottom: 8, textTransform: 'uppercase', letterSpacing: -1 },
+  header: { fontSize: 26, fontWeight: '800', marginBottom: 8, letterSpacing: -1 },
   subheader: { fontSize: 14, marginBottom: 24, fontWeight: '700' },
-  label: { fontSize: 12, marginBottom: 8, fontWeight: '900', textTransform: 'uppercase' },
+  label: { fontSize: 12, marginBottom: 8, fontWeight: '800' },
   input: {
-    borderWidth: 2,
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderRadius: 16,
     padding: 15,
     fontSize: 16,
     marginBottom: 20,
     fontWeight: '700'
   },
   saveButton: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 18,
     alignItems: 'center',
     marginTop: 20,
   },
-  saveButtonText: { fontWeight: '900', fontSize: 16, textTransform: 'uppercase' },
+  saveButtonText: { fontWeight: '800', fontSize: 16 },
   modeToggle: { flexDirection: 'row', marginBottom: 24, gap: 12 },
-  modeButton: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, alignItems: 'center' },
-  modeButtonActive: { backgroundColor: colors.accent },
-  modeButtonText: { fontWeight: '900', fontSize: 14, textTransform: 'uppercase' },
-  sectionTitle: { fontSize: 18, fontWeight: '900', marginBottom: 16, textTransform: 'uppercase' },
+  modeButton: { flex: 1, padding: 12, borderRadius: 16, borderWidth: 1.5, alignItems: 'center' },
+  modeButtonActive: { backgroundColor: colors.bt },
+  modeButtonText: { fontWeight: '800', fontSize: 14 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
   row: { flexDirection: 'row', gap: 12 },
   half: { flex: 1 },
-  addButton: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
-  addButtonText: { fontWeight: '900', fontSize: 14, textTransform: 'uppercase' },
-  coursesList: { borderRadius: 12, padding: 16, marginTop: 20, borderWidth: 2 },
-  listTitle: { fontSize: 14, fontWeight: '900', marginBottom: 12, textTransform: 'uppercase' },
+  addButton: { borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 8 },
+  addButtonText: { fontWeight: '800', fontSize: 14 },
+  coursesList: { borderRadius: 16, padding: 16, marginTop: 20, borderWidth: 1.5 },
+  listTitle: { fontSize: 14, fontWeight: '800', marginBottom: 12 },
   courseItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
   courseInfo: { flex: 1 },
   courseName: { fontSize: 14, fontWeight: '700' },
   courseDetails: { fontSize: 12, marginTop: 2 },
   calculatedSummary: { paddingTop: 12, borderTopWidth: 1, marginTop: 8 },
   summaryLabel: { fontSize: 12, fontWeight: '700' },
-  summaryValue: { fontSize: 14, fontWeight: '900', marginTop: 4 },
+  summaryValue: { fontSize: 14, fontWeight: '800', marginTop: 4 },
 });

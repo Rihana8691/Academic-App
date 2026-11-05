@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { getAllTasks, addTask, updateTaskStatus, deleteTask } from '../dbHelpers';
 import { getCountdown } from '../utils';
 import { useTheme } from '../ThemeContext';
+import { emitTasksChanged } from '../events';
+import { Hero, Card, PillButton, inputStyle, softShadow } from '../ui';
 
 export default function TasksScreen() {
   const { colors } = useTheme();
@@ -12,139 +14,85 @@ export default function TasksScreen() {
   const [name, setName] = useState('');
   const [deadline, setDeadline] = useState('');
 
-  const loadTasks = useCallback(() => {
-    setTasks(getAllTasks());
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadTasks();
-    }, [loadTasks])
-  );
+  const loadTasks = useCallback(() => setTasks(getAllTasks()), []);
+  useFocusEffect(useCallback(() => { loadTasks(); }, [loadTasks]));
 
   function handleAddTask() {
     if (!name.trim() || !deadline.trim()) {
-      Alert.alert('Missing Info', 'Please enter a task name and a deadline (YYYY-MM-DD).');
+      Alert.alert('Missing info', 'Please enter a task name and a deadline (YYYY-MM-DD).');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline.trim()) || isNaN(new Date(deadline.trim()).getTime())) {
+      Alert.alert('Check the date', 'Please use the format YYYY-MM-DD, for example 2026-11-05.');
       return;
     }
     addTask(name.trim(), deadline.trim(), null, null);
-    setName('');
-    setDeadline('');
-    loadTasks();
+    setName(''); setDeadline(''); loadTasks(); emitTasksChanged();
   }
-
-  function handleToggleStatus(task) {
-    const newStatus = task.status === 'pending' ? 'done' : 'pending';
-    updateTaskStatus(task.id, newStatus);
-    loadTasks();
-  }
-
-  function handleDelete(id) {
-    deleteTask(id);
-    loadTasks();
-  }
-
-  const styles = createStyles(colors);
+  const toggle = (t) => { updateTaskStatus(t.id, t.status === 'pending' ? 'done' : 'pending'); loadTasks(); emitTasksChanged(); };
+  const remove = (id) => { deleteTask(id); loadTasks(); emitTasksChanged(); };
+  const pending = tasks.filter(t => t.status === 'pending').length;
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={tasks}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
-        ListHeaderComponent={<Text style={[styles.header, {color: colors.text}]}>Pending Tasks</Text>}
+        keyExtractor={(i) => i.id.toString()}
+        contentContainerStyle={{ paddingBottom: 169 }}
+        ListHeaderComponent={
+          <Hero top style={{ marginBottom: 13 }}>
+            <Text style={styles.title}>My tasks</Text>
+            <Text style={styles.sub}>{pending === 0 ? "You're all caught up 🎉" : `${pending} thing${pending > 1 ? 's' : ''} to do`}</Text>
+          </Hero>
+        }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-done-circle-outline" size={60} color={colors.subText} />
-            <Text style={[styles.emptyText, {color: colors.subText}]}>You're all caught up!</Text>
+          <View style={{ alignItems: 'center', marginTop: 20 }}>
+            <Text style={{ fontSize: 46 }}>🎉</Text>
+            <Text style={{ color: colors.subText, fontWeight: '700', marginTop: 5 }}>Nothing here yet</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.taskCard, styles.shadow, {backgroundColor: colors.card, borderColor: colors.border}, item.status === 'done' && {backgroundColor: colors.secondary}]}>
-            <TouchableOpacity style={styles.taskInfo} onPress={() => handleToggleStatus(item)}>
-              <Ionicons
-                name={item.status === 'done' ? "checkbox" : "square-outline"}
-                size={24}
-                color={item.status === 'done' ? colors.success : colors.accent}
-              />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.taskName, {color: colors.text}, item.status === 'done' && styles.taskNameDone]}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.taskDeadline, {color: colors.accent}]}>
-                  {item.deadline} {item.status === 'pending' ? `· ${getCountdown(item.deadline)}` : ''}
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={20} color={colors.error} />
-            </TouchableOpacity>
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const done = item.status === 'done';
+          return (
+            <Card style={[styles.task, done && { opacity: 0.6 }]}>
+              <TouchableOpacity style={styles.row} onPress={() => toggle(item)}>
+                <View style={[styles.check, { borderColor: done ? colors.success : colors.accentLight }, done && { backgroundColor: colors.success }]}>
+                  {done && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <View style={{ flex: 1, marginLeft: 9 }}>
+                  <Text style={[styles.taskName, { color: colors.text }, done && { textDecorationLine: 'line-through' }]}>{item.name}</Text>
+                  <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700', marginTop: 3 }}>
+                    {item.deadline}{!done ? ` · ${getCountdown(item.deadline)}` : ''}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => remove(item.id)} style={{ padding: 4 }}>
+                <Ionicons name="close-circle" size={19} color={colors.error} />
+              </TouchableOpacity>
+            </Card>
+          );
+        }}
       />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.addSectionContainer}
-        keyboardVerticalOffset={100}
-      >
-        <View style={[styles.addSection, styles.shadow, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-          <Text style={[styles.addTitle, {color: colors.accent}]}>New Task</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={[styles.input, { flex: 2, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]}
-              placeholder="What needs to be done?"
-              placeholderTextColor="#666"
-              value={name}
-              onChangeText={setName}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#666"
-              value={deadline}
-              onChangeText={setDeadline}
-            />
-          </View>
-          <TouchableOpacity style={[styles.addButton, {backgroundColor: colors.text}]} onPress={handleAddTask}>
-            <Text style={[styles.addButtonText, {color: colors.background}]}>Add Task</Text>
-          </TouchableOpacity>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={100} style={styles.sheetWrap}>
+        <View style={[styles.sheet, softShadow, { backgroundColor: colors.card, shadowOffset: { width: 0, height: -6 } }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
+          <TextInput style={[inputStyle(colors), { marginBottom: 6 }]} placeholder="What needs to be done?" placeholderTextColor={colors.subText} value={name} onChangeText={setName} />
+          <TextInput style={[inputStyle(colors), { marginBottom: 9 }]} placeholder="Deadline (YYYY-MM-DD)" placeholderTextColor={colors.subText} value={deadline} onChangeText={setDeadline} />
+          <PillButton label="Add task" icon="add-circle" onPress={handleAddTask} />
         </View>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1 },
-  header: { fontSize: 28, fontWeight: '900', marginBottom: 20, padding: 20, textTransform: 'uppercase', letterSpacing: -1 },
-  shadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 0
-  },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { marginTop: 10, fontSize: 16, fontWeight: '700' },
-  taskCard: {
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  taskInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  taskName: { fontSize: 16, fontWeight: '800' },
-  taskNameDone: { textDecorationLine: 'line-through', opacity: 0.5 },
-  taskDeadline: { fontSize: 11, marginTop: 4, fontWeight: '900', textTransform: 'uppercase' },
-  deleteBtn: { padding: 8 },
-  addSectionContainer: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  addSection: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, borderTopWidth: 3 },
-  addTitle: { fontSize: 15, fontWeight: '900', marginBottom: 12, textTransform: 'uppercase' },
-  inputRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  input: { borderRadius: 12, padding: 12, fontSize: 14, borderWidth: 2, fontWeight: '700' },
-  addButton: { borderRadius: 12, padding: 15, alignItems: 'center' },
-  addButtonText: { fontWeight: '900', textTransform: 'uppercase' },
+const styles = StyleSheet.create({
+  title: { color: '#fff', fontSize: 27, fontWeight: '800' },
+  sub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: 4 },
+  task: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 13, marginBottom: 8, padding: 10 },
+  row: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  check: { width: 28, height: 28, borderRadius: 9, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
+  taskName: { fontSize: 14, fontWeight: '700' },
+  sheetWrap: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+  sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 13, paddingBottom: Platform.OS === 'ios' ? 36 : 22 },
+  handle: { width: 35, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10 },
 });

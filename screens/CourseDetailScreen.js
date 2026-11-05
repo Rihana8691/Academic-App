@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Platform, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Platform, Image, Modal } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,6 +7,9 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import {
   getCourseById,
   updateCourseDetails,
+  toggleCourseFinished,
+  finishCourse,
+  updateScheduleEntry,
   getAttendance,
   setAttendance,
   getAssessments,
@@ -43,7 +46,9 @@ import {
   deleteTask,
   updateTaskStatus
 } from '../dbHelpers';
+import { getCountdown } from '../utils';
 import { useTheme } from '../ThemeContext';
+import { GRADE_POINTS } from '../gpaCalculator';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TYPES = ['Lecture', 'Lab', 'Tutorial'];
@@ -103,10 +108,13 @@ export default function CourseDetailScreen({ route, navigation }) {
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [selectedType, setSelectedType] = useState('Lecture');
   const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date(Date.now() + 60 * 60 * 1000));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [room, setRoom] = useState('');
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [gradeModal, setGradeModal] = useState(false);
+  const [pickedGrade, setPickedGrade] = useState(null);
 
   const [totalClasses, setTotalClasses] = useState('');
   const [allowedAbsence, setAllowedAbsence] = useState('');
@@ -178,18 +186,50 @@ export default function CourseDetailScreen({ route, navigation }) {
     loadData();
   }
 
+  function timeToDate(str) {
+    const [h, m] = String(str).split(':').map(Number);
+    const d = new Date();
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  }
+
+  function resetScheduleForm() {
+    setEditingScheduleId(null);
+    setRoom('');
+    setSelectedType('Lecture');
+  }
+
+  function handleEditSchedule(entry) {
+    setEditingScheduleId(entry.id);
+    setSelectedDay(entry.day_of_week);
+    setSelectedType(entry.class_type || 'Lecture');
+    setStartTime(timeToDate(entry.start_time));
+    setEndTime(timeToDate(entry.end_time));
+    setRoom(entry.room || '');
+  }
+
   function handleAddSchedule() {
     const start = startTime.getHours().toString().padStart(2, '0') + ":" + startTime.getMinutes().toString().padStart(2, '0');
     const end = endTime.getHours().toString().padStart(2, '0') + ":" + endTime.getMinutes().toString().padStart(2, '0');
 
-    const conflict = getScheduleConflict(selectedDay, start, end);
+    if (end <= start) {
+      Alert.alert('Check the times', 'The end time must be after the start time.');
+      return;
+    }
+
+    // When editing, ignore the entry being edited. Finished courses never count as conflicts.
+    const conflict = getScheduleConflict(selectedDay, start, end, editingScheduleId);
     if (conflict) {
       Alert.alert('Conflict', `Overlaps with ${conflict.course_name}`);
       return;
     }
 
-    addScheduleEntry(courseId, selectedDay, start, end, room.trim(), selectedType);
-    setRoom('');
+    if (editingScheduleId) {
+      updateScheduleEntry(editingScheduleId, selectedDay, start, end, room.trim(), selectedType);
+    } else {
+      addScheduleEntry(courseId, selectedDay, start, end, room.trim(), selectedType);
+    }
+    resetScheduleForm();
     loadData();
   }
 
@@ -344,6 +384,33 @@ export default function CourseDetailScreen({ route, navigation }) {
     loadData();
   }
 
+  function handleToggleFinished() {
+    if (course.is_finished) {
+      Alert.alert(
+        'Reopen course?',
+        'It will show up again in your schedule, attendance and deadlines.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reopen', onPress: () => { toggleCourseFinished(courseId, false); loadData(); } },
+        ]
+      );
+      return;
+    }
+    // Nothing changes until a grade is chosen and saved.
+    setPickedGrade(course.grade || null);
+    setGradeModal(true);
+  }
+
+  function confirmFinish() {
+    if (!pickedGrade) {
+      Alert.alert('Pick a grade', 'Choose the final grade to finish this course.');
+      return;
+    }
+    finishCourse(courseId, pickedGrade);
+    setGradeModal(false);
+    loadData();
+  }
+
   if (!course || !goalData) return null;
 
   const theoryAssessments = assessments.filter(a => a.category === 'Theory');
@@ -385,27 +452,40 @@ export default function CourseDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.inputRow}>
               <TouchableOpacity style={[styles.primaryButton, {flex: 1, backgroundColor: colors.accent}]} onPress={handleSaveHeader}>
-                <Text style={{color: colors.buttonText, fontWeight: '900'}}>SAVE</Text>
+                <Text style={{color: colors.buttonText, fontWeight: '800'}}>SAVE</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.primaryButton, {flex: 1, backgroundColor: colors.subText}]} onPress={() => setIsEditingHeader(false)}>
-                <Text style={{color: colors.background, fontWeight: '900'}}>CANCEL</Text>
+                <Text style={{color: colors.background, fontWeight: '800'}}>CANCEL</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : (
           <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start'}}>
             <View style={{flex: 1}}>
-              <Text style={[styles.header, {color: colors.text}]}>{course.name}</Text>
-              <Text style={[styles.subheader, {color: colors.subText}]}>{course.course_code || 'N/A'} · {course.credit_hours} Credits</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap'}}>
+                <Text style={[styles.header, {color: '#fff'}]}>{course.name}</Text>
+                {course.is_finished ? (
+                  <View style={[styles.statusBadge, {backgroundColor: colors.success + '22', borderColor: colors.success}]}>
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Text style={[styles.statusBadgeText, {color: colors.success}]}>FINISHED</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.statusBadge, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                    <Ionicons name="time-outline" size={12} color={colors.subText} />
+                    <Text style={[styles.statusBadgeText, {color: colors.subText}]}>IN PROGRESS</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.subheader, {color: 'rgba(255,255,255,0.85)'}]}>{course.course_code || 'N/A'} · {course.credit_hours} Credits {course.grade ? `· Grade: ${course.grade}` : ''}</Text>
             </View>
             <TouchableOpacity onPress={handleStartEditingHeader} style={{padding: 8}}>
-              <Ionicons name="create-outline" size={24} color={colors.accent} />
+              <Ionicons name="create-outline" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
       </View>
 
-      <View style={[styles.tabBar, {backgroundColor: colors.card, borderColor: colors.border}]}>
+      <View style={[styles.tabBar]}>
         <TabButton name="Summary" icon="stats-chart-outline" label="Home" />
         <TabButton name="Grades" icon="school-outline" label="Grades" />
         <TabButton name="Study" icon="book-outline" label="Study" />
@@ -417,7 +497,56 @@ export default function CourseDetailScreen({ route, navigation }) {
 
         {activeTab === 'Summary' && (
           <View>
-            <View style={[styles.card, styles.shadow, { borderLeftColor: goalData.isImpossible ? colors.error : colors.accent, borderLeftWidth: 5, backgroundColor: colors.card, borderColor: colors.border }]}>
+            {course.is_finished && !course.grade ? (
+              <View style={[styles.card, styles.shadow, { backgroundColor: colors.warning + '22', borderColor: colors.warning, borderWidth: 1 }]}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Finished, but no grade yet</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.subText, marginTop: 4, lineHeight: 17 }}>
+                  This course is hidden from your schedule, attendance and deadlines, and it does not count in your CGPA. Add the grade, or reopen the course.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                  <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.accent }} onPress={() => { setPickedGrade(null); setGradeModal(true); }}>
+                    <Text style={{ color: colors.buttonText, fontWeight: '800' }}>Add grade</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: colors.secondary }} onPress={() => { toggleCourseFinished(courseId, false); loadData(); }}>
+                    <Text style={{ color: colors.text, fontWeight: '800' }}>Reopen course</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={[
+                styles.card,
+                styles.shadow,
+                {
+                  backgroundColor: course.is_finished ? colors.success + '15' : colors.card,
+                  borderColor: course.is_finished ? colors.success : colors.border,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 14,
+                  paddingHorizontal: 16
+                }
+              ]}
+              onPress={handleToggleFinished}
+            >
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1}}>
+                <Ionicons
+                  name={course.is_finished ? "checkmark-circle" : "checkbox-outline"}
+                  size={26}
+                  color={course.is_finished ? colors.success : colors.accent}
+                />
+                <View style={{flex: 1}}>
+                  <Text style={{fontSize: 15, fontWeight: '800', color: colors.text}}>
+                    {course.is_finished ? "Course Finished" : "Finish Course"}
+                  </Text>
+                  <Text style={{fontSize: 11, fontWeight: '700', color: colors.subText, marginTop: 2}}>
+                    {course.is_finished ? "Tap to reopen course if active again" : "Pick your final grade to mark this course as completed"}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={course.is_finished ? colors.success : colors.accent} />
+            </TouchableOpacity>
+            <View style={[styles.card, styles.shadow, { borderLeftColor: goalData.isImpossible ? colors.error : colors.accent, borderLeftWidth: 0, backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="trending-up" size={22} color={colors.accent} />
                 <Text style={[styles.cardLabel, {color: colors.accent}]}>Goal Coach</Text>
@@ -575,8 +704,8 @@ export default function CourseDetailScreen({ route, navigation }) {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                  <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.text}]} onPress={() => setShowUnderstandingModal(null)}>
-                    <Text style={[styles.modalCloseText, {color: colors.background}]}>Cancel</Text>
+                  <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.accent}]} onPress={() => setShowUnderstandingModal(null)}>
+                    <Text style={[styles.modalCloseText, {color: colors.buttonText}]}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -612,7 +741,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <TextInput
                       style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                       placeholder="Add a separate note for this chapter..."
-                      placeholderTextColor="#888"
+                      placeholderTextColor={colors.subText}
                       value={newSeparateNote}
                       onChangeText={setNewSeparateNote}
                     />
@@ -624,8 +753,8 @@ export default function CourseDetailScreen({ route, navigation }) {
                       <Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Add Note Entry</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.text}]} onPress={() => setShowNotesModal(null)}>
-                      <Text style={[styles.modalCloseText, {color: colors.background}]}>Close</Text>
+                    <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: colors.accent}]} onPress={() => setShowNotesModal(null)}>
+                      <Text style={[styles.modalCloseText, {color: colors.buttonText}]}>Close</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -634,12 +763,12 @@ export default function CourseDetailScreen({ route, navigation }) {
 
             <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
               <Text style={[styles.formTitle, {color: colors.text}]}>Add Syllabus Topic</Text>
-              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="e.g. Chapter 4: Calculus" placeholderTextColor="#666" value={newTopic} onChangeText={setNewTopic} />
+              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="e.g. Chapter 4: Calculus" placeholderTextColor={colors.subText} value={newTopic} onChangeText={setNewTopic} />
               
               <View style={styles.typeRow}>
                 {['low', 'medium', 'high'].map(imp => (
-                  <TouchableOpacity key={imp} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, topicImportance === imp && {backgroundColor: colors.text}]} onPress={() => setTopicImportance(imp)}>
-                    <Text style={[styles.typeBtnText, {color: colors.text}, topicImportance === imp && {color: colors.background}]}>{imp}</Text>
+                  <TouchableOpacity key={imp} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, topicImportance === imp && {backgroundColor: colors.accent}]} onPress={() => setTopicImportance(imp)}>
+                    <Text style={[styles.typeBtnText, {color: colors.text}, topicImportance === imp && {color: colors.buttonText}]}>{imp}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -653,7 +782,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                   style={[styles.notesInput, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                   multiline
                   placeholder="📝 Add key points, formulas, or summaries..."
-                  placeholderTextColor="#888"
+                  placeholderTextColor={colors.subText}
                   value={topicRevisionNotes}
                   onChangeText={setTopicRevisionNotes}
                 />
@@ -681,7 +810,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                 </ScrollView>
               )}
 
-              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddTopic}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Study Plan</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleAddTopic}><Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Add to Study Plan</Text></TouchableOpacity>
             </View>
           </View>
         )}
@@ -714,7 +843,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <TextInput 
                       style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
                       placeholder="0" 
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.subText}
                       value={midObtained}
                       onChangeText={setMidObtained}
                       keyboardType="numeric"
@@ -725,15 +854,15 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <TextInput 
                       style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
                       placeholder="0" 
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.subText}
                       value={midTotal}
                       onChangeText={setMidTotal}
                       keyboardType="numeric"
                     />
                   </View>
                 </View>
-                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleSaveMidGrades}>
-                  <Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Mid Grade</Text>
+                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleSaveMidGrades}>
+                  <Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Save Mid Grade</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -759,7 +888,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <TextInput 
                       style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
                       placeholder="0" 
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.subText}
                       value={finalObtained}
                       onChangeText={setFinalObtained}
                       keyboardType="numeric"
@@ -770,15 +899,15 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <TextInput 
                       style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} 
                       placeholder="0" 
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.subText}
                       value={finalTotal}
                       onChangeText={setFinalTotal}
                       keyboardType="numeric"
                     />
                   </View>
                 </View>
-                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleSaveFinalGrades}>
-                  <Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Final Grade</Text>
+                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleSaveFinalGrades}>
+                  <Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Save Final Grade</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -821,17 +950,17 @@ export default function CourseDetailScreen({ route, navigation }) {
               <Text style={[styles.formTitle, {color: colors.text}]}>Add New Record</Text>
               <View style={styles.typeRow}>
                 {['Theory', 'Lab'].map(cat => (
-                  <TouchableOpacity key={cat} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, assessCategory === cat && {backgroundColor: colors.text}]} onPress={() => setAssessCategory(cat)}>
-                    <Text style={[styles.typeBtnText, {color: colors.text}, assessCategory === cat && {color: colors.background}]}>{cat}</Text>
+                  <TouchableOpacity key={cat} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, assessCategory === cat && {backgroundColor: colors.accent}]} onPress={() => setAssessCategory(cat)}>
+                    <Text style={[styles.typeBtnText, {color: colors.text}, assessCategory === cat && {color: colors.buttonText}]}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Assessment Name" placeholderTextColor="#666" value={assessName} onChangeText={setAssessName} />
+              <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Assessment Name" placeholderTextColor={colors.subText} value={assessName} onChangeText={setAssessName} />
               <View style={styles.inputRow}>
-                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Score" placeholderTextColor="#666" value={assessObtained} onChangeText={setAssessObtained} keyboardType="numeric" />
-                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total" placeholderTextColor="#666" value={assessTotal} onChangeText={setAssessTotal} keyboardType="numeric" />
+                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Score" placeholderTextColor={colors.subText} value={assessObtained} onChangeText={setAssessObtained} keyboardType="numeric" />
+                <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total" placeholderTextColor={colors.subText} value={assessTotal} onChangeText={setAssessTotal} keyboardType="numeric" />
               </View>
-              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddAssessment}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Save Grade</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleAddAssessment}><Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Save Grade</Text></TouchableOpacity>
             </View>
           </View>
         )}
@@ -870,14 +999,14 @@ export default function CourseDetailScreen({ route, navigation }) {
                  <Text style={[styles.inputText, {color: colors.text}]}>{absenceDate.toISOString().split('T')[0]}</Text>
               </TouchableOpacity>
               {showDatePicker && <DateTimePicker value={absenceDate} mode="date" display="default" maximumDate={new Date()} onChange={(event, d) => { setShowDatePicker(false); if(d) setAbsenceDate(d); }} />}
-              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleLogAbsence}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to History</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleLogAbsence}><Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>Add to History</Text></TouchableOpacity>
             </View>
 
-            <View style={[styles.divider, {backgroundColor: colors.text}]} />
+            <View style={[styles.divider, {backgroundColor: colors.accent}]} />
             <Text style={[styles.formTitle, {color: colors.text}]}>Attendance Policy</Text>
             <View style={styles.inputRow}>
-              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total Classes" placeholderTextColor="#666" value={totalClasses} onChangeText={setTotalClasses} keyboardType="numeric" />
-              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Allowed Absences" placeholderTextColor="#666" value={allowedAbsence} onChangeText={setAllowedAbsence} keyboardType="numeric" />
+              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Total Classes" placeholderTextColor={colors.subText} value={totalClasses} onChangeText={setTotalClasses} keyboardType="numeric" />
+              <TextInput style={[styles.inputField, { flex: 1, backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text }]} placeholder="Allowed Absences" placeholderTextColor={colors.subText} value={allowedAbsence} onChangeText={setAllowedAbsence} keyboardType="numeric" />
             </View>
             <TouchableOpacity style={[styles.secondaryButton, {borderColor: colors.accent}]} onPress={handleSaveAttendance}><Text style={[styles.secondaryButtonText, {color: colors.accent}]}>Update Policy</Text></TouchableOpacity>
           </View>
@@ -892,22 +1021,23 @@ export default function CourseDetailScreen({ route, navigation }) {
               </View>
 
               {scheduleEntries.map((s) => (
-                <View key={s.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: colors.border}]}>
+                <View key={s.id} style={[styles.scheduleItem, {backgroundColor: colors.secondary, borderColor: editingScheduleId === s.id ? colors.accent : colors.border}]}>
                   <View style={[styles.typeBadge, { backgroundColor: s.class_type === 'Lab' ? colors.warning : colors.accent, borderColor: colors.border }]}><Text style={[styles.typeBadgeText, {color: colors.buttonText}]}>{s.class_type}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.timeText, {color: colors.text}]}>{s.day_of_week} · {s.start_time} - {s.end_time}</Text>
                     <Text style={[styles.roomText, {color: colors.subText}]}>{s.room || 'TBA'}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => { deleteScheduleEntry(s.id); loadData(); }}><Ionicons name="close-circle" size={20} color={colors.error} /></TouchableOpacity>
+                  <TouchableOpacity accessibilityLabel={`Edit ${s.day_of_week} ${s.start_time}`} onPress={() => handleEditSchedule(s)} style={{ marginRight: 12 }}><Ionicons name="create-outline" size={20} color={colors.accent} /></TouchableOpacity>
+                  <TouchableOpacity accessibilityLabel={`Delete ${s.day_of_week} ${s.start_time}`} onPress={() => { deleteScheduleEntry(s.id); if (editingScheduleId === s.id) resetScheduleForm(); loadData(); }}><Ionicons name="close-circle" size={20} color={colors.error} /></TouchableOpacity>
                 </View>
               ))}
 
               <View style={[styles.formContainer, {borderTopColor: colors.border}]}>
-                <Text style={[styles.formTitle, {color: colors.text}]}>Add Class Time</Text>
+                <Text style={[styles.formTitle, {color: colors.text}]}>{editingScheduleId ? 'Edit Class Time' : 'Add Class Time'}</Text>
                 <View style={styles.typeRow}>
                   {TYPES.map(t => (
-                    <TouchableOpacity key={t} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, selectedType === t && {backgroundColor: colors.text}]} onPress={() => setSelectedType(t)}>
-                      <Text style={[styles.typeBtnText, {color: colors.text}, selectedType === t && {color: colors.background}]}>{t}</Text>
+                    <TouchableOpacity key={t} style={[styles.typeBtn, {backgroundColor: colors.card, borderColor: colors.border}, selectedType === t && {backgroundColor: colors.accent}]} onPress={() => setSelectedType(t)}>
+                      <Text style={[styles.typeBtnText, {color: colors.text}, selectedType === t && {color: colors.buttonText}]}>{t}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -940,8 +1070,11 @@ export default function CourseDetailScreen({ route, navigation }) {
                   />
                 )}
 
-                <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Room / Location" placeholderTextColor="#666" value={room} onChangeText={setRoom} />
-                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.text}]} onPress={handleAddSchedule}><Text style={[styles.primaryButtonText, {color: colors.background}]}>Add to Schedule</Text></TouchableOpacity>
+                <TextInput style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]} placeholder="Room / Location" placeholderTextColor={colors.subText} value={room} onChangeText={setRoom} />
+                <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.accent}]} onPress={handleAddSchedule}><Text style={[styles.primaryButtonText, {color: colors.buttonText}]}>{editingScheduleId ? 'Save Changes' : 'Add to Schedule'}</Text></TouchableOpacity>
+                {editingScheduleId ? (
+                  <TouchableOpacity style={[styles.primaryButton, {backgroundColor: colors.secondary, marginTop: 8}]} onPress={resetScheduleForm}><Text style={[styles.primaryButtonText, {color: colors.text}]}>Cancel editing</Text></TouchableOpacity>
+                ) : null}
               </View>
             </View>
 
@@ -970,7 +1103,7 @@ export default function CourseDetailScreen({ route, navigation }) {
                 <TextInput
                   style={[styles.inputField, {backgroundColor: colors.secondary, borderColor: colors.border, color: colors.text}]}
                   placeholder="Task description..."
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.subText}
                   value={taskName}
                   onChangeText={setTaskName}
                 />
@@ -999,127 +1132,155 @@ export default function CourseDetailScreen({ route, navigation }) {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={gradeModal} transparent animationType="fade" onRequestClose={() => setGradeModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 24, padding: 18 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Finish this course</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.subText, marginTop: 6, marginBottom: 14, lineHeight: 18 }}>
+              Pick your final grade. The course is only marked finished once a grade is saved.
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {Object.keys(GRADE_POINTS).map((g) => (
+                <TouchableOpacity key={g} accessibilityLabel={`Grade ${g}`} onPress={() => setPickedGrade(g)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, backgroundColor: pickedGrade === g ? colors.accent : colors.secondary }}>
+                  <Text style={{ fontWeight: '800', color: pickedGrade === g ? colors.buttonText : colors.text }}>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              <TouchableOpacity style={{ flex: 1, padding: 13, borderRadius: 14, alignItems: 'center', backgroundColor: colors.secondary }} onPress={() => setGradeModal(false)}>
+                <Text style={{ fontWeight: '800', color: colors.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, padding: 13, borderRadius: 14, alignItems: 'center', backgroundColor: pickedGrade ? colors.accent : colors.border }} onPress={confirmFinish}>
+                <Text style={{ fontWeight: '800', color: colors.buttonText }}>Save and finish</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  tabBar: { flexDirection: 'row', borderRadius: 12, padding: 4, marginBottom: 20, borderWidth: 2 },
-  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, gap: 4 },
-  tabBtnText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+  tabBar: { flexDirection: 'row', borderRadius: 28, padding: 6, marginBottom: 20, backgroundColor: colors.card, shadowColor: '#6C5CE7', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 14, elevation: 4 },
+  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 14, gap: 4 },
+  tabBtnText: { fontSize: 9, fontWeight: '800' },
   container: { flex: 1, padding: 20 },
   shadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 0
+    shadowColor: '#6C5CE7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4
   },
-  headerArea: { marginBottom: 20 },
-  header: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
-  subheader: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', marginTop: 4 },
-  card: { borderRadius: 15, padding: 12, marginBottom: 15, borderWidth: 2 },
+  headerArea: { marginBottom: 18, backgroundColor: colors.accent, borderRadius: 22, padding: 14 },
+  header: { fontSize: 24, fontWeight: '800', letterSpacing: -1 },
+  subheader: { fontSize: 14, fontWeight: '700', marginTop: 4 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 16, borderWidth: 1.5 },
+  statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  card: { borderRadius: 20, padding: 12, marginBottom: 12, borderWidth: 0 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
-  cardLabel: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  cardLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
   goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  goalLabel: { fontSize: 9, textTransform: 'uppercase', fontWeight: '900' },
-  goalValue: { fontSize: 28, fontWeight: '900' },
+  goalLabel: { fontSize: 9, fontWeight: '800' },
+  goalValue: { fontSize: 28, fontWeight: '800' },
   targetBox: { alignItems: 'flex-end' },
-  targetInput: { fontSize: 20, fontWeight: '900', borderBottomWidth: 3, textAlign: 'right', width: 50 },
+  targetInput: { fontSize: 20, fontWeight: '800', borderBottomWidth: 3, textAlign: 'right', width: 50 },
   progressContainer: { height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 10, borderWidth: 1.5 },
   progressContainerMain: { flex: 1 },
   progressFill: { height: '100%' },
-  remainingText: { fontSize: 11, marginTop: 4, fontWeight: '800' },
+  remainingText: { fontSize: 11, marginTop: 4, fontWeight: '700' },
   attendanceSummary: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  statBox: { alignItems: 'center', padding: 10, borderRadius: 12, minWidth: 75, borderWidth: 2 },
-  statValue: { fontSize: 18, fontWeight: '900' },
-  statLabel: { fontSize: 8, textTransform: 'uppercase', fontWeight: '900' },
+  statBox: { alignItems: 'center', padding: 10, borderRadius: 16, minWidth: 75, borderWidth: 1.5 },
+  statValue: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 8, fontWeight: '800' },
   historySection: { marginTop: 8, marginBottom: 12 },
-  historyTitle: { fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  historyTitle: { fontSize: 12, fontWeight: '800' },
   historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
   historyDate: { fontSize: 13, fontWeight: '700' },
   historyReason: { fontSize: 11 },
   divider: { height: 2, marginVertical: 12, borderStyle: 'dashed' },
-  secondaryButton: { padding: 10, borderRadius: 12, alignItems: 'center', borderWidth: 2, marginTop: 8 },
-  secondaryButtonText: { fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
-  miniLabel: { fontSize: 9, marginBottom: 2, textTransform: 'uppercase', fontWeight: '900' },
-  subCategoryTitle: { fontSize: 13, fontWeight: '900', marginTop: 12, marginBottom: 6, textTransform: 'uppercase', borderBottomWidth: 2 },
-  originalMarkText: { color: '#E63946', fontStyle: 'italic', fontWeight: '900' },
-  coachText: { fontSize: 12, fontWeight: '800', lineHeight: 18 },
+  secondaryButton: { padding: 10, borderRadius: 16, alignItems: 'center', borderWidth: 1.5, marginTop: 8 },
+  secondaryButtonText: { fontWeight: '800', fontSize: 12 },
+  miniLabel: { fontSize: 9, marginBottom: 2, fontWeight: '800' },
+  subCategoryTitle: { fontSize: 13, fontWeight: '800', marginTop: 12, marginBottom: 6, borderBottomWidth: 2 },
+  originalMarkText: { color: '#E63946', fontStyle: 'italic', fontWeight: '800' },
+  coachText: { fontSize: 12, fontWeight: '700', lineHeight: 18 },
   gradeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
-  gradeName: { fontSize: 14, fontWeight: '900' },
+  gradeName: { fontSize: 14, fontWeight: '800' },
   gradeSub: { fontSize: 12, fontWeight: '700' },
   miniMasteryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
-  masteryText: { fontSize: 12, fontWeight: '900' },
-  masteryBox: { alignItems: 'center', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 2 },
+  masteryText: { fontSize: 12, fontWeight: '800' },
+  masteryBox: { alignItems: 'center', padding: 15, borderRadius: 20, marginBottom: 15, borderWidth: 1.5 },
   topicRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
-  topicName: { fontSize: 14, fontWeight: '800' },
+  topicName: { fontSize: 14, fontWeight: '700' },
   topicDone: { textDecorationLine: 'line-through', opacity: 0.5 },
   topicMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  understandingBadge: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
+  understandingBadge: { width: 32, height: 32, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5 },
   understandingText: { fontSize: 16 },
-  importanceBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1 },
-  importanceText: { fontSize: 9, fontWeight: '900' },
+  importanceBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 14, borderWidth: 1 },
+  importanceText: { fontSize: 9, fontWeight: '800' },
   imageCount: { fontSize: 12, fontWeight: '700' },
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalContent: { width: '80%', maxWidth: 400, borderRadius: 16, padding: 20, borderWidth: 2 },
-  modalTitle: { fontSize: 18, fontWeight: '900', marginBottom: 16, textTransform: 'uppercase' },
-  understandingOption: { padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 2, alignItems: 'center' },
+  modalContent: { width: '80%', maxWidth: 400, borderRadius: 20, padding: 20, borderWidth: 1.5 },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
+  understandingOption: { padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1.5, alignItems: 'center' },
   understandingOptionText: { fontSize: 14, fontWeight: '700' },
-  modalCloseBtn: { padding: 12, borderRadius: 8, marginTop: 12, alignItems: 'center' },
-  modalCloseText: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  modalCloseBtn: { padding: 12, borderRadius: 12, marginTop: 12, alignItems: 'center' },
+  modalCloseText: { fontSize: 14, fontWeight: '800' },
   notesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12, marginBottom: 12, borderBottomWidth: 2 },
-  notesHeaderText: { fontSize: 16, fontWeight: '900' },
+  notesHeaderText: { fontSize: 16, fontWeight: '800' },
   notesFooter: { marginTop: 8, marginBottom: 12 },
   notesHint: { fontSize: 12, fontStyle: 'italic' },
-  notesSection: { marginTop: 12, paddingTop: 12, borderWidth: 2, borderRadius: 12 },
+  notesSection: { marginTop: 12, paddingTop: 12, borderWidth: 1.5, borderRadius: 16 },
   notesSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  notesSectionTitle: { fontSize: 14, fontWeight: '900' },
-  notesInput: { borderRadius: 12, padding: 12, borderWidth: 2, minHeight: 100, textAlignVertical: 'top', marginBottom: 12 },
-  topicImage: { width: 200, height: 200, borderRadius: 12, resizeMode: 'contain', marginBottom: 12 },
+  notesSectionTitle: { fontSize: 14, fontWeight: '800' },
+  notesInput: { borderRadius: 16, padding: 12, borderWidth: 1.5, minHeight: 100, textAlignVertical: 'top', marginBottom: 12 },
+  topicImage: { width: 200, height: 200, borderRadius: 16, resizeMode: 'contain', marginBottom: 12 },
   imageScroll: { maxHeight: 250, marginBottom: 12 },
   imageContainer: { marginRight: 12, position: 'relative' },
-  deleteImageBtn: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  deleteImageBtn: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   selectedImagesScroll: { maxHeight: 80, marginBottom: 12 },
   selectedImageContainer: { marginRight: 8, position: 'relative' },
-  selectedImage: { width: 60, height: 60, borderRadius: 8 },
+  selectedImage: { width: 60, height: 60, borderRadius: 12 },
   removeSelectedImageBtn: { position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
-  roundedMarkText: { fontWeight: '900' },
+  roundedMarkText: { fontWeight: '800' },
   modalButtonRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  modalButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
-  modalButtonText: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  modalButton: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
+  modalButtonText: { fontSize: 14, fontWeight: '800' },
   assessmentList: { maxHeight: 200, marginBottom: 12 },
-  assessmentItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 2 },
+  assessmentItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1.5 },
   assessmentItemText: { fontSize: 14, fontWeight: '700' },
   historyList: { maxHeight: 300, marginBottom: 12 },
-  historyItem: { padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 2 },
-  historyItemName: { fontSize: 14, fontWeight: '900' },
+  historyItem: { padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1.5 },
+  historyItemName: { fontSize: 14, fontWeight: '800' },
   historyItemDetail: { fontSize: 12, fontWeight: '700' },
   historyItemReason: { fontSize: 11, marginTop: 4 },
   historyItemDate: { fontSize: 10, marginTop: 4, opacity: 0.7 },
-  formContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 2 },
+  formContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 1 },
   formSubtitle: { fontSize: 12, marginBottom: 12, fontStyle: 'italic' },
   examGradeForm: { padding: 10, marginBottom: 10 },
   inputLabel: { fontSize: 11, fontWeight: '700', marginBottom: 2 },
-  inputField: { borderRadius: 12, padding: 8, marginBottom: 8, borderWidth: 2, fontWeight: '700', fontSize: 13 },
+  inputField: { borderRadius: 16, padding: 8, marginBottom: 8, borderWidth: 1.5, fontWeight: '700', fontSize: 13 },
   inputRow: { flexDirection: 'row', gap: 8 },
-  primaryButton: { padding: 10, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  primaryButtonText: { fontWeight: '900', textTransform: 'uppercase', fontSize: 12 },
-  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, padding: 10, borderRadius: 12, borderWidth: 2 },
-  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
-  typeBadgeText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
-  timeText: { fontSize: 13, fontWeight: '900' },
+  primaryButton: { padding: 10, borderRadius: 16, alignItems: 'center', marginTop: 4 },
+  primaryButtonText: { fontWeight: '800', fontSize: 12 },
+  scheduleItem: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, padding: 10, borderRadius: 16, borderWidth: 1.5 },
+  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 14, borderWidth: 1 },
+  typeBadgeText: { fontSize: 9, fontWeight: '800' },
+  timeText: { fontSize: 13, fontWeight: '800' },
   roomText: { fontSize: 11, fontWeight: '700' },
   typeRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  typeBtn: { flex: 1, padding: 8, borderRadius: 10, borderWidth: 2, alignItems: 'center' },
-  typeBtnText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  typeBtn: { flex: 1, padding: 8, borderRadius: 14, borderWidth: 1.5, alignItems: 'center' },
+  typeBtnText: { fontSize: 10, fontWeight: '800' },
   dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 },
-  dayChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 2 },
-  dayChipText: { fontSize: 10, fontWeight: '900' },
-  examItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 12, marginBottom: 8, borderWidth: 2 },
-  examTypeTitle: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
-  examCountdown: { fontSize: 11, fontWeight: '900' },
-  datePickerBtn: { padding: 6, borderRadius: 8, borderWidth: 1.5 },
+  dayChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1.5 },
+  dayChipText: { fontSize: 10, fontWeight: '800' },
+  examItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 16, marginBottom: 8, borderWidth: 1.5 },
+  examTypeTitle: { fontSize: 13, fontWeight: '800' },
+  examCountdown: { fontSize: 11, fontWeight: '800' },
+  datePickerBtn: { padding: 6, borderRadius: 12, borderWidth: 1.5 },
   inputText: { fontWeight: '700', fontSize: 13 },
   emptyText: { fontStyle: 'italic', fontWeight: '700', fontSize: 12 },
 });
